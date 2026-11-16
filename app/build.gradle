@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.mogada.landmeasure'
+    compileSdk 37
+
+    defaultConfig {
+        applicationId 'com.mogada.landmeasure'
+        minSdk 24
+        targetSdk 37
+        versionCode 1
+        versionName '1.0.0'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
+    lint {
+        abortOnError true
+        warningsAsErrors true
+        // Build tools are pinned for reproducible builds, not upgraded on every lint run.
+        disable 'GradleDependency', 'AndroidGradlePluginVersion'
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation 'androidx.activity:activity:1.12.4'
+    implementation 'net.sf.geographiclib:GeographicLib-Java:2.1'
+    implementation 'org.locationtech.jts:jts-core:1.20.0'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.16.1'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}
