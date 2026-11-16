@@ -21,6 +21,8 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Spinner;
+import android.widget.Button;
+import android.widget.ScrollView;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -34,6 +36,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.io.FileInputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(AndroidJUnit4.class)
@@ -103,9 +108,13 @@ public class DeviceWorkflowTest {
     }
 
     private boolean has(int resource) {
+        return hasText(app.getString(resource));
+    }
+
+    private boolean hasText(String text) {
         boolean[] found = {false};
         instrumentation.runOnMainSync(() ->
-                found[0] = find(activity.getWindow().getDecorView(), app.getString(resource)) != null);
+                found[0] = find(activity.getWindow().getDecorView(), text) != null);
         return found[0];
     }
 
@@ -145,6 +154,23 @@ public class DeviceWorkflowTest {
         assertTrue(load(id).area > 12000);
         assertEquals(4, load(id).points.size());
         assertEquals(PackageManager.PERMISSION_DENIED, app.checkSelfPermission(Manifest.permission.INTERNET));
+        app.io.submit(() -> {
+            app.store.getWritableDatabase().execSQL("UPDATE activity SET completed=1577934240000,updated=1893542640000 WHERE id=?",
+                    new Object[]{id}); return null;
+        }).get(10, TimeUnit.SECONDS);
+        click(R.string.back);
+        click(R.string.filters);
+        setAreaFilter(R.string.area_equal, "1.2309", R.string.unit_ha);
+        popupClick(R.string.confirm);
+        await(() -> has(R.string.records_next), "Compact completed result");
+        instrumentation.runOnMainSync(() -> {
+            View card = pointButton(activity.getWindow().getDecorView(), "Device test parcel");
+            assertNotNull(card);
+            String summary = ((Button) card).getText().toString();
+            assertTrue(summary.contains("2020")); assertFalse(summary.contains("2030"));
+            assertTrue(summary.contains("GPS quality:")); assertTrue(summary.contains("Size:"));
+            card.performClick();
+        });
         click(R.string.navigate_to_land);
         await(() -> has(R.string.maps_point_hint), "Selectable saved waypoints");
         instrumentation.runOnMainSync(() -> {
@@ -312,7 +338,7 @@ public class DeviceWorkflowTest {
             await(() -> has(R.string.edit_metadata), "Initial record");
             assertEquals((app.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                     == Configuration.UI_MODE_NIGHT_YES, darkDisplay());
-            click(R.string.back); click(R.string.settings);
+            click(R.string.back); openSettings();
             await(() -> has(R.string.save_settings), "Settings loaded");
             instrumentation.runOnMainSync(() ->
                     assertEquals(0, themeSpinner(activity.getWindow().getDecorView()).getSelectedItemPosition()));
@@ -335,6 +361,184 @@ public class DeviceWorkflowTest {
                 shell("cmd uimode night no");
             }
         }
+    }
+
+    private View described(View root, int resource) {
+        if (android.text.TextUtils.equals(app.getString(resource), root.getContentDescription())) return root;
+        if (root instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View found = described(group.getChildAt(i), resource);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private void popupClick(int resource) throws Exception {
+        await(() -> dialogHas(app.getString(resource)), "Popup item " + app.getString(resource));
+        android.view.accessibility.AccessibilityNodeInfo root = instrumentation.getUiAutomation().getRootInActiveWindow();
+        assertNotNull(root);
+        android.view.accessibility.AccessibilityNodeInfo item = root.findAccessibilityNodeInfosByText(app.getString(resource)).get(0);
+        while (item != null && !item.isClickable()) item = item.getParent();
+        assertNotNull(item);
+        assertTrue(item.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
+        instrumentation.waitForIdleSync();
+    }
+
+    private void openSettings() throws Exception {
+        instrumentation.runOnMainSync(() -> {
+            View more = described(activity.getWindow().getDecorView(), R.string.more_options);
+            assertNotNull(more); assertTrue(more.performClick());
+        });
+        popupClick(R.string.settings);
+        await(() -> has(R.string.save_settings), "Settings opened from overflow");
+    }
+
+    private android.view.accessibility.AccessibilityNodeInfo accessibleDescription(
+            android.view.accessibility.AccessibilityNodeInfo node, int resource) {
+        if (android.text.TextUtils.equals(app.getString(resource), node.getContentDescription())) return node;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            android.view.accessibility.AccessibilityNodeInfo found = accessibleDescription(child, resource);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private void setAreaFilter(int operator, String amount, int unit) throws Exception {
+        await(() -> dialogHas(app.getString(R.string.area_filter)), "Area filter dialog");
+        android.view.accessibility.AccessibilityNodeInfo root = instrumentation.getUiAutomation().getRootInActiveWindow();
+        assertNotNull(root);
+        assertTrue(root.findAccessibilityNodeInfosByText(app.getString(R.string.county)).isEmpty());
+        android.view.accessibility.AccessibilityNodeInfo comparison = accessibleDescription(root, R.string.area_filter);
+        assertNotNull(comparison);
+        assertTrue(comparison.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
+        popupClick(operator);
+        root = instrumentation.getUiAutomation().getRootInActiveWindow();
+        android.view.accessibility.AccessibilityNodeInfo input = accessibleDescription(root, R.string.area_threshold);
+        assertNotNull(input);
+        android.os.Bundle value = new android.os.Bundle();
+        value.putCharSequence(android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, amount);
+        assertTrue(input.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT, value));
+        android.view.accessibility.AccessibilityNodeInfo units = accessibleDescription(root, R.string.area_filter_unit);
+        assertNotNull(units);
+        assertTrue(units.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
+        popupClick(unit);
+    }
+
+    private void listFixtures() throws Exception {
+        app.io.submit(() -> {
+            for (int i = 1; i <= 23; i++) {
+                String id = app.store.create();
+                app.store.saveMetadata(id, String.format(Locale.ROOT, "List fixture %03d", i),
+                        new JSONObject().put("usage", "agricultural").put("owner", "Hidden owner")
+                                .put("location", "Hidden location").put("land", "Hidden parcel")
+                                .put("county", "Hidden county"), Models.AreaUnit.ACRE, "MANUAL");
+                app.store.getWritableDatabase().execSQL("UPDATE activity SET created=1577934240000,updated=? WHERE id=?",
+                        new Object[]{1893542640000L + i * 1000, id});
+            }
+            app.store.putSetting("sort", "name"); return null;
+        }).get(10, TimeUnit.SECONDS);
+        open(null);
+        awaitPage(1, 10, 23, 1, 3);
+    }
+
+    private void awaitPage(int first, int last, int total, int page, int count) throws Exception {
+        await(() -> hasText(app.getString(R.string.records_page, first, last, total, page, count)), "Activity page " + page);
+    }
+
+    private List<String> listCards(View root) {
+        List<String> cards = new ArrayList<>();
+        if (root instanceof Button button && button.getText().toString().startsWith("List fixture "))
+            cards.add(button.getText().toString());
+        if (root instanceof ViewGroup group)
+            for (int i = 0; i < group.getChildCount(); i++) cards.addAll(listCards(group.getChildAt(i)));
+        return cards;
+    }
+
+    private ScrollView scrollView(View root) {
+        if (root instanceof ScrollView scroll) return scroll;
+        if (root instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) {
+                ScrollView found = scrollView(group.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    @Test public void recordsUseTenItemPagesCompactCardsAndFixedOverflow() throws Exception {
+        listFixtures();
+        instrumentation.runOnMainSync(() -> {
+            List<String> cards = listCards(activity.getWindow().getDecorView());
+            assertEquals(10, cards.size()); assertTrue(cards.get(0).startsWith("List fixture 001\n"));
+            for (String card : cards) {
+                assertTrue(card.contains("Drafted ")); assertTrue(card.contains("2020")); assertFalse(card.contains("2030"));
+                assertTrue(card.contains(app.getString(R.string.record_not_measured)));
+                assertTrue(card.contains(app.getString(R.string.record_gps_unassessed)));
+                assertFalse(card.contains("Hidden ")); assertFalse(card.contains("agricultural"));
+            }
+            assertFalse(find(activity.getWindow().getDecorView(), app.getString(R.string.records_previous)).isEnabled());
+        });
+        click(R.string.records_next); awaitPage(11, 20, 23, 2, 3);
+        instrumentation.runOnMainSync(() -> assertEquals(10, listCards(activity.getWindow().getDecorView()).size()));
+        click(R.string.records_next); awaitPage(21, 23, 23, 3, 3);
+        instrumentation.runOnMainSync(() -> {
+            assertEquals(3, listCards(activity.getWindow().getDecorView()).size());
+            assertFalse(find(activity.getWindow().getDecorView(), app.getString(R.string.records_next)).isEnabled());
+        });
+        click(R.string.records_previous); awaitPage(11, 20, 23, 2, 3);
+        MainActivity previous = activity;
+        instrumentation.runOnMainSync(() -> activity.recreate());
+        await(() -> {
+            instrumentation.runOnMainSync(() -> {
+                for (android.app.Activity current : ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED))
+                    if (current instanceof MainActivity main && main != previous) activity = main;
+            });
+            return activity != previous;
+        }, "Paged list restored after recreation");
+        awaitPage(11, 20, 23, 2, 3);
+        instrumentation.runOnMainSync(() -> scrollView(activity.getWindow().getDecorView()).fullScroll(View.FOCUS_DOWN));
+        instrumentation.waitForIdleSync();
+        instrumentation.runOnMainSync(() -> {
+            View root = activity.getWindow().getDecorView();
+            View more = described(root, R.string.more_options);
+            android.graphics.Rect visible = new android.graphics.Rect();
+            assertTrue(scrollView(root).getScrollY() > 0);
+            assertTrue(more.getGlobalVisibleRect(visible)); assertTrue(visible.height() > 0);
+        });
+        openSettings();
+        click(R.string.back); awaitPage(11, 20, 23, 2, 3);
+    }
+
+    @Test public void clearFiltersResetsSortSearchViewAdvancedCriteriaAndPage() throws Exception {
+        listFixtures();
+        click(R.string.records_next); awaitPage(11, 20, 23, 2, 3);
+        instrumentation.runOnMainSync(() -> {
+            View root = activity.getWindow().getDecorView();
+            ((Spinner) described(root, R.string.record_sort)).setSelection(2);
+            ((Spinner) described(root, R.string.record_view)).setSelection(1);
+        });
+        awaitPage(1, 10, 23, 1, 3);
+        click(R.string.filters);
+        setAreaFilter(R.string.area_greater, "1", R.string.unit_acre);
+        popupClick(R.string.confirm);
+        await(() -> has(R.string.no_matches), "Advanced criteria applied");
+        instrumentation.runOnMainSync(() ->
+                findInput(activity.getWindow().getDecorView(), app.getString(R.string.search)).setText("No such title"));
+        click(R.string.clear_filters);
+        awaitPage(1, 10, 23, 1, 3);
+        instrumentation.runOnMainSync(() -> {
+            View view = activity.getWindow().getDecorView();
+            assertEquals(0, ((Spinner) described(view, R.string.record_sort)).getSelectedItemPosition());
+            assertEquals(0, ((Spinner) described(view, R.string.record_view)).getSelectedItemPosition());
+            assertEquals("", findInput(view, app.getString(R.string.search)).getText().toString());
+            assertTrue(listCards(view).get(0).startsWith("List fixture 023\n"));
+        });
+        assertEquals("updated", app.io.submit(() -> app.store.setting("sort", "")).get());
+        Thread.sleep(400);
+        awaitPage(1, 10, 23, 1, 3);
     }
 
     private EditText findInput(View view, String description) {
@@ -362,7 +566,8 @@ public class DeviceWorkflowTest {
             assertEquals(Models.Status.PAUSED, app.store.load(id).status);
             assertEquals(1, app.store.load(id).points.size());
             assertEquals(1, app.store.list("njeri", "all", "name", new Store.RecordFilter(
-                    "PAUSED", "agricultural", "ACRE", "kiambu", false, 0, Long.MAX_VALUE)).size());
+                    "PAUSED", "agricultural", Store.AreaComparison.ANY, 0, Models.AreaUnit.ACRE,
+                    false, 0, Long.MAX_VALUE)).size());
             return null;
         }).get(10, TimeUnit.SECONDS);
     }

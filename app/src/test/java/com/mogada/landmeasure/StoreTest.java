@@ -17,6 +17,7 @@ import org.robolectric.annotation.Config;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 28, application = Application.class)
@@ -198,10 +199,78 @@ public class StoreTest {
         Models.Record r = store.load(id);
         r.metadata.put("county", "Kiambu");
         store.saveMetadata(id, r.title, r.metadata, r.unit, r.mode);
-        Store.RecordFilter filter = new Store.RecordFilter("DRAFT", "agricultural", "ACRE",
-                "kiambu", false, 0, Long.MAX_VALUE);
+        Store.RecordFilter filter = new Store.RecordFilter("DRAFT", "agricultural", Store.AreaComparison.ANY,
+                0, Models.AreaUnit.ACRE, false, 0, Long.MAX_VALUE);
         assertEquals(id, store.list("njeri", "all", "name", filter).get(0).id);
-        assertTrue(store.list("njeri", "all", "name", new Store.RecordFilter("COMPLETED", "", "",
-                "", false, 0, Long.MAX_VALUE)).isEmpty());
+        assertTrue(store.list("njeri", "all", "name", new Store.RecordFilter("COMPLETED", "", Store.AreaComparison.ANY,
+                0, Models.AreaUnit.ACRE, false, 0, Long.MAX_VALUE)).isEmpty());
+    }
+
+    private void pagingDrafts(int count) {
+        android.database.sqlite.SQLiteDatabase db = store.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            for (int i = 0; i < count; i++) db.execSQL(
+                    "INSERT INTO activity(id,title,status,unit,mode,metadata,search_text,usage,county,created,updated) "
+                    + "VALUES(?,'Same title','DRAFT','ACRE','MANUAL',?,'same title','agricultural','target',1000,2000)",
+                    new Object[]{String.format(Locale.ROOT, "paging-%04d", i),
+                            "{\"usage\":\"agricultural\",\"county\":\"Target\"}"});
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+    }
+
+    @Test public void pagesReachPastFormerLimitWithoutSkippingEqualSortValues() throws Exception {
+        pagingDrafts(503);
+        List<String> actual = new ArrayList<>(), expected = new ArrayList<>();
+        for (int i = 0; i < 503; i++) expected.add(String.format(Locale.ROOT, "paging-%04d", i));
+        for (String sort : List.of("updated", "name")) {
+            actual.clear();
+            for (int page = 0; page < 51; page++) {
+                Store.RecordPage result = store.listPage("", "all", sort, Store.RecordFilter.none(), page);
+                assertEquals(503, result.total()); assertEquals(51, result.pageCount());
+                assertEquals(page == 50 ? 3 : 10, result.records().size());
+                for (Models.Record record : result.records()) actual.add(record.id);
+            }
+            assertEquals(expected, actual);
+        }
+    }
+
+    @Test public void filteredPagesClampAfterRemovalAndHandleNoMatches() throws Exception {
+        pagingDrafts(23);
+        Store.RecordFilter filter = new Store.RecordFilter("DRAFT", "agricultural", Store.AreaComparison.ANY,
+                0, Models.AreaUnit.ACRE, false, 2000, 2000);
+        Store.RecordPage last = store.listPage("same", "draft", "name", filter, 99);
+        assertEquals(23, last.total()); assertEquals(2, last.index()); assertEquals(3, last.records().size());
+        store.getWritableDatabase().delete("activity", "id>=?", new String[]{"paging-0020"});
+        last = store.listPage("same", "draft", "name", filter, 2);
+        assertEquals(20, last.total()); assertEquals(1, last.index()); assertEquals(10, last.records().size());
+        Store.RecordPage empty = store.listPage("%", "draft", "name", filter, 2);
+        assertEquals(0, empty.total()); assertEquals(0, empty.index()); assertTrue(empty.records().isEmpty());
+        assertTrue(store.listPage("same", "completed", "name", filter, 0).records().isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> store.listPage("", "all", "name", filter, -1));
+    }
+
+    @Test public void areaComparisonsConvertAcrossDisplayUnitsAndMatchRoundedEquality() throws Exception {
+        String id = polygon(); store.complete(id); draft();
+        assertEquals(Models.AreaUnit.ACRE, store.load(id).unit);
+        Store.RecordFilter equal = areaFilter(Store.AreaComparison.EQUAL, 1.2309, Models.AreaUnit.HA);
+        assertEquals(id, store.listPage("", "all", "name", equal, 0).records().get(0).id);
+        assertEquals(1, store.listPage("", "all", "name", equal, 0).total());
+        assertEquals(1, store.listPage("", "all", "name",
+                areaFilter(Store.AreaComparison.GREATER, 1, Models.AreaUnit.HA), 0).total());
+        assertEquals(1, store.listPage("", "all", "name",
+                areaFilter(Store.AreaComparison.LESS, 20000, Models.AreaUnit.M2), 0).total());
+        assertEquals(0, store.listPage("", "all", "name",
+                areaFilter(Store.AreaComparison.LESS, 0.01, Models.AreaUnit.KM2), 0).total());
+        for (Store.AreaComparison comparison : List.of(Store.AreaComparison.LESS, Store.AreaComparison.GREATER))
+            assertEquals(0, store.listPage("", "all", "name", areaFilter(comparison, 1.2309, Models.AreaUnit.HA), 0).total());
+        assertEquals(2, store.listPage("", "all", "name", Store.RecordFilter.none(), 0).total());
+        assertThrows(IllegalArgumentException.class, () -> areaFilter(Store.AreaComparison.EQUAL, Double.NaN, Models.AreaUnit.HA));
+        assertThrows(IllegalArgumentException.class, () -> areaFilter(Store.AreaComparison.GREATER, -1, Models.AreaUnit.ACRE));
+        assertThrows(IllegalArgumentException.class, () -> areaFilter(Store.AreaComparison.LESS, 0.00001, Models.AreaUnit.M2));
+    }
+
+    private Store.RecordFilter areaFilter(Store.AreaComparison comparison, double value, Models.AreaUnit unit) {
+        return new Store.RecordFilter("", "", comparison, value, unit, false, 0, Long.MAX_VALUE);
     }
 }

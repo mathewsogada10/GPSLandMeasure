@@ -31,7 +31,9 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -73,7 +75,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
     private ScrollView scroll;
     private String page = "home", id, search = "", view = "all", sort = "updated", lastFailure;
     private Models.Record record;
-    private int pointOffset;
+    private int pointOffset, recordPage, listRequest;
     private boolean foreground, loading, binding, editorDirty, anchorMode;
     private Location fix;
     private TextView readinessText, saveState;
@@ -126,6 +128,13 @@ public final class MainActivity extends ComponentActivity implements LocationLis
             id = state.getString("id"); page = state.getString("page", "home");
             search = state.getString("search", ""); view = state.getString("view", "all");
             pointOffset = state.getInt("pointOffset");
+            recordPage = state.getInt("recordPage");
+            String[] savedFilter = state.getStringArray("recordFilter");
+            if (savedFilter != null) recordFilter = new Store.RecordFilter(
+                    savedFilter[0], savedFilter[1], Store.AreaComparison.valueOf(savedFilter[2]),
+                    state.getDouble("filterArea"), Models.AreaUnit.valueOf(savedFilter[3]),
+                    state.getBoolean("filterWarnings"), state.getLong("filterFrom"),
+                    state.getLong("filterUntil", Long.MAX_VALUE));
         } else if (getIntent().hasExtra("id")) {
             id = getIntent().getStringExtra("id"); page = "detail";
         }
@@ -174,7 +183,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
 
     @Override protected void onDestroy() {
         for (AlertDialog dialog : new ArrayList<>(dialogs)) dialog.dismiss();
-        app.listeners.remove(changed); app.main.removeCallbacks(autoSave);
+        app.listeners.remove(changed); app.main.removeCallbacks(autoSave); app.main.removeCallbacks(searchRefresh);
         stopReadiness();
         super.onDestroy();
     }
@@ -184,6 +193,12 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         state.putString("id", id); state.putString("page", page);
         state.putString("search", search); state.putString("view", view);
         state.putInt("pointOffset", pointOffset);
+        state.putInt("recordPage", recordPage);
+        state.putStringArray("recordFilter", new String[]{recordFilter.status(), recordFilter.usage(),
+                recordFilter.comparison().name(), recordFilter.areaUnit().name()});
+        state.putDouble("filterArea", recordFilter.areaValue());
+        state.putBoolean("filterWarnings", recordFilter.warnings());
+        state.putLong("filterFrom", recordFilter.from()); state.putLong("filterUntil", recordFilter.until());
         super.onSaveInstanceState(state);
     }
 
@@ -202,6 +217,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
 
     private void screen(String next, int heading, boolean back) {
         stopReadiness();
+        app.main.removeCallbacks(searchRefresh); listRequest++;
         page = next;
         LinearLayout shell = new LinearLayout(this); shell.setOrientation(LinearLayout.VERTICAL);
         shell.setBackgroundColor(colors.background);
@@ -223,6 +239,21 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         brand.setTypeface(null, Typeface.BOLD);
         LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, -2, 1);
         brandParams.setMarginStart(dp(10)); header.addView(brand, brandParams);
+        if ("home".equals(next)) {
+            ImageButton more = new ImageButton(this);
+            more.setImageResource(R.drawable.ic_more_vert);
+            more.setImageTintList(ColorStateList.valueOf(colors.primary));
+            more.setBackgroundResource(android.R.drawable.list_selector_background);
+            more.setPadding(dp(12), dp(12), dp(12), dp(12));
+            more.setContentDescription(getString(R.string.more_options));
+            if (Build.VERSION.SDK_INT >= 26) more.setTooltipText(getString(R.string.more_options));
+            more.setOnClickListener(v -> {
+                PopupMenu menu = new PopupMenu(this, more, Gravity.END);
+                menu.getMenu().add(R.string.settings).setOnMenuItemClickListener(item -> { settings(); return true; });
+                menu.show();
+            });
+            header.addView(more, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        }
         shell.addView(header);
         scroll = new ScrollView(this); scroll.setFillViewport(true);
         content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
@@ -264,54 +295,83 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         Spinner sorts = spinner(new int[]{R.string.sort_updated, R.string.sort_name, R.string.sort_area,
                 R.string.sort_status, R.string.sort_measured, R.string.sort_oldest,
                 R.string.sort_name_desc, R.string.sort_area_asc}, indexOf(SORT_KEYS, sort));
+        views.setContentDescription(getString(R.string.record_view));
+        sorts.setContentDescription(getString(R.string.record_sort));
         filters.addView(views, weighted()); filters.addView(sorts, weighted()); content.addView(filters);
         secondary(R.string.filters, this::filterDialog);
         secondary(R.string.clear_filters, () -> {
-            recordFilter = Store.RecordFilter.none(); search = ""; view = "all"; home();
+            recordFilter = Store.RecordFilter.none(); search = ""; view = "all"; sort = "updated";
+            recordPage = 0; home();
         });
         LinearLayout results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL);
         content.addView(results);
         Runnable refresh = () -> {
+            if (!"home".equals(page) || results.getParent() != content || isFinishing() || isDestroyed()) return;
             search = query.getText().toString();
             view = VIEW_KEYS[views.getSelectedItemPosition()];
             sort = SORT_KEYS[sorts.getSelectedItemPosition()];
             String wantedSearch = search, wantedView = view, wantedSort = sort;
+            Store.RecordFilter wantedFilter = recordFilter;
+            int wantedPage = recordPage, request = ++listRequest;
             app.run(() -> {
                 app.store.putSetting("sort", wantedSort);
-                return app.store.list(wantedSearch, wantedView, wantedSort, recordFilter);
-            }, records -> {
-                if (!"home".equals(page) || !wantedSearch.equals(search) || !wantedView.equals(view)) return;
+                return app.store.listPage(wantedSearch, wantedView, wantedSort, wantedFilter, wantedPage);
+            }, result -> {
+                if (!"home".equals(page) || request != listRequest || isFinishing() || isDestroyed()) return;
+                recordPage = result.index();
                 results.removeAllViews();
-                if (records.isEmpty()) {
-                    TextView empty = text(getString(search.isEmpty() ? R.string.no_records : R.string.no_matches), 21, colors.text);
+                if (result.records().isEmpty()) {
+                    boolean filtered = !wantedSearch.isEmpty() || !"all".equals(wantedView)
+                            || !wantedFilter.equals(Store.RecordFilter.none());
+                    TextView empty = text(getString(filtered ? R.string.no_matches : R.string.no_records), 21, colors.text);
                     results.addView(empty);
-                    if (search.isEmpty()) results.addView(text(getString(R.string.no_records_body), 16, colors.muted));
+                    if (!filtered) results.addView(text(getString(R.string.no_records_body), 16, colors.muted));
+                    return;
                 }
-                for (Models.Record r : records) {
-                    String title = r.title.isBlank() ? getString(R.string.new_title) : r.title;
-                    String summary = title + "\n" + status(r) + " · " + date(r.updated)
-                            + "\n" + r.metadata.optString("location");
-                    if (!r.metadata.optString("owner").isBlank()) summary += "\n" + r.metadata.optString("owner");
-                    if (!r.metadata.optString("land").isBlank()) summary += "\n" + r.metadata.optString("land");
-                    if (!r.metadata.optString("usage").isBlank()) summary += " · " + metadataValue("usage", r.metadata.optString("usage"));
-                    summary += "\n" + (r.hasResult && (r.status == Models.Status.COMPLETED
-                            || r.status == Models.Status.ARCHIVED) ? area(r.area, r.unit) + " · " + resultQuality(r)
-                            : getString(R.string.quality_not_recorded));
-                    Button card = button(summary, () -> open(r.id)); card.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+                int first = result.index() * Store.RECORD_PAGE_SIZE + 1;
+                results.addView(text(getString(R.string.records_page, first, first + result.records().size() - 1,
+                        result.total(), result.index() + 1, result.pageCount()), 14, colors.muted));
+                for (Models.Record r : result.records()) {
+                    Button card = button(activitySummary(r), () -> open(r.id));
+                    card.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
                     card.setBackground(cardBackground()); results.addView(card, spaced());
                 }
-                if (records.size() == 500) results.addView(text(getString(R.string.showing_limit), 14, colors.muted));
+                LinearLayout navigation = row();
+                Button previous = button(R.string.records_previous, () -> { recordPage = result.index() - 1; home(); });
+                Button next = button(R.string.records_next, () -> { recordPage = result.index() + 1; home(); });
+                previous.setEnabled(result.index() > 0);
+                next.setEnabled(result.index() + 1 < result.pageCount());
+                navigation.addView(previous, weighted()); navigation.addView(next, weighted()); results.addView(navigation);
             }, this::error);
         };
+        Runnable refilter = () -> {
+            if (results.getParent() != content) return;
+            recordPage = 0; refresh.run();
+        };
         query.addTextChangedListener(watcher(() -> {
+            if (results.getParent() != content) return;
+            search = query.getText().toString(); recordPage = 0; listRequest++;
             app.main.removeCallbacks(searchRefresh); searchRefresh = refresh; app.main.postDelayed(searchRefresh, 250);
         }));
-        selection(views, refresh); selection(sorts, refresh);
-        secondary(R.string.settings, this::settings);
+        selection(views, refilter); selection(sorts, refilter);
         refresh.run();
     }
 
     private Runnable searchRefresh = () -> {};
+
+    private String activitySummary(Models.Record r) {
+        String title = r.title.isBlank() ? getString(R.string.new_title) : r.title;
+        boolean measured = r.hasResult && (r.status == Models.Status.COMPLETED || r.status == Models.Status.ARCHIVED);
+        String when;
+        if (r.deletedAt > 0) when = getString(R.string.record_deleted_on, date(r.deletedAt));
+        else if (measured && r.completed > 0) when = getString(R.string.record_completed_on, date(r.completed));
+        else if (r.status == Models.Status.DRAFT) when = getString(R.string.record_drafted_on, date(r.created));
+        else when = getString(R.string.record_updated_on, date(r.updated));
+        String state = r.deletedAt > 0 ? getString(R.string.recently_deleted) + " · " + status(r) : status(r);
+        String size = getString(R.string.record_size, measured ? area(r.area, r.unit) : getString(R.string.record_not_measured));
+        return title + "\n" + when + "\n" + state + " · " + size + "\n"
+                + (measured ? resultQuality(r) : getString(R.string.record_gps_unassessed));
+    }
 
     private void editor(String activityId) {
         id = activityId;
@@ -980,7 +1040,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
                 app.store.putSetting("accuracy", "10"); app.store.putSetting("movement", "3");
                 app.store.putSetting("mode", "AUTO"); return null;
             }, ignored -> settings(), this::error));
-            secondary(R.string.recently_deleted, () -> { view = "deleted"; home(); });
+            secondary(R.string.recently_deleted, () -> { view = "deleted"; recordPage = 0; home(); });
             gap(12); body(getString(R.string.privacy_body, BuildConfig.VERSION_NAME)); warning(getString(R.string.disclaimer));
         }, this::error);
     }
@@ -995,15 +1055,28 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         System.arraycopy(USAGE_LABELS, 0, usages, 1, USAGE_LABELS.length);
         Spinner usage = spinner(usages, recordFilter.usage().isEmpty() ? 0 : indexOf(Fields.USAGES, recordFilter.usage()) + 1);
         form.addView(text(getString(R.string.usage), 14, colors.text)); form.addView(usage);
-        int[] units = {R.string.any, R.string.unit_m2, R.string.unit_ha, R.string.unit_acre, R.string.unit_km2};
-        Spinner unit = spinner(units, recordFilter.unit().isEmpty() ? 0 : Models.AreaUnit.valueOf(recordFilter.unit()).ordinal() + 1);
-        form.addView(text(getString(R.string.unit), 14, colors.text)); form.addView(unit);
-        EditText county = input(getString(R.string.county), recordFilter.county(), 200);
-        form.addView(text(getString(R.string.county), 14, colors.text)); form.addView(county);
+        form.addView(text(getString(R.string.area_filter), 14, colors.text));
+        Spinner comparison = spinner(new int[]{R.string.area_any, R.string.area_equal, R.string.area_greater,
+                R.string.area_less}, recordFilter.comparison().ordinal());
+        comparison.setContentDescription(getString(R.string.area_filter)); form.addView(comparison);
+        EditText areaValue = input(getString(R.string.area_threshold),
+                recordFilter.comparison() == Store.AreaComparison.ANY ? "" : number(recordFilter.areaValue(), 4), 30);
+        areaValue.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        Spinner unit = spinner(unitLabels(), recordFilter.areaUnit().ordinal());
+        unit.setContentDescription(getString(R.string.area_filter_unit));
+        LinearLayout size = row();
+        size.addView(areaValue, weighted()); size.addView(unit, weighted()); form.addView(size);
+        Runnable toggleArea = () -> {
+            boolean enabled = comparison.getSelectedItemPosition() != Store.AreaComparison.ANY.ordinal();
+            areaValue.setEnabled(enabled); unit.setEnabled(enabled);
+        };
+        toggleArea.run(); selection(comparison, toggleArea);
+        form.addView(text(getString(R.string.area_filter_hint), 14, colors.muted));
         EditText from = input(getString(R.string.from_date), isoDate(recordFilter.from()), 10);
         EditText until = input(getString(R.string.until_date), isoDate(recordFilter.until()), 10);
         form.addView(text(getString(R.string.from_date), 14, colors.text)); form.addView(from);
         form.addView(text(getString(R.string.until_date), 14, colors.text)); form.addView(until);
+        form.addView(text(getString(R.string.filter_date_hint), 14, colors.muted));
         CheckBox warnings = check(getString(R.string.warning_only), recordFilter.warnings()); form.addView(warnings);
         ScrollView container = new ScrollView(this); container.addView(form);
         AlertDialog dialog = new DialogBuilder().setTitle(R.string.filters).setView(container)
@@ -1013,12 +1086,17 @@ public final class MainActivity extends ComponentActivity implements LocationLis
                 long first = parseDate(from.getText().toString(), false);
                 long last = parseDate(until.getText().toString(), true);
                 if (first > last) throw new java.text.ParseException("", 0);
-                recordFilter = new Store.RecordFilter(status.getSelectedItemPosition() == 0 ? ""
-                        : Models.Status.values()[status.getSelectedItemPosition() - 1].name(),
-                        usage.getSelectedItemPosition() == 0 ? "" : Fields.USAGES[usage.getSelectedItemPosition() - 1],
-                        unit.getSelectedItemPosition() == 0 ? "" : Models.AreaUnit.values()[unit.getSelectedItemPosition() - 1].name(),
-                        county.getText().toString().trim(), warnings.isChecked(), first, last);
-                dialog.dismiss(); home();
+                Store.AreaComparison operator = Store.AreaComparison.values()[comparison.getSelectedItemPosition()];
+                try {
+                    recordFilter = new Store.RecordFilter(status.getSelectedItemPosition() == 0 ? ""
+                            : Models.Status.values()[status.getSelectedItemPosition() - 1].name(),
+                            usage.getSelectedItemPosition() == 0 ? "" : Fields.USAGES[usage.getSelectedItemPosition() - 1],
+                            operator, operator == Store.AreaComparison.ANY ? 0 : parse(areaValue.getText().toString()),
+                            Models.AreaUnit.values()[unit.getSelectedItemPosition()], warnings.isChecked(), first, last);
+                } catch (java.text.ParseException | IllegalArgumentException e) {
+                    areaValue.setError(getString(R.string.area_filter_error)); return;
+                }
+                recordPage = 0; dialog.dismiss(); home();
             } catch (java.text.ParseException e) { from.setError(getString(R.string.filter_date_error)); }
         }));
         dialog.show();

@@ -78,7 +78,7 @@ final class Models {
         JSONObject metadata = new JSONObject();
         List<Point> points = new ArrayList<>();
         int version, rejected, overrides, mockCount;
-        long created, updated, deletedAt, purgeAfter, duration;
+        long created, updated, completed, deletedAt, purgeAfter, duration;
         double area, perimeter, best, median, worst, closure;
         boolean hasResult;
         CaptureRules.Config config;

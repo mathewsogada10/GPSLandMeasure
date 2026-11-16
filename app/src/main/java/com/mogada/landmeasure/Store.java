@@ -212,7 +212,7 @@ final class Store extends SQLiteOpenHelper {
             r.id = text(c, "id"); r.title = text(c, "title"); r.status = Models.Status.valueOf(text(c, "status"));
             r.unit = Models.AreaUnit.valueOf(text(c, "unit")); r.mode = text(c, "mode");
             r.metadata = new JSONObject(text(c, "metadata")); r.version = integer(c, "version");
-            r.created = number(c, "created"); r.updated = number(c, "updated");
+            r.created = number(c, "created"); r.updated = number(c, "updated"); r.completed = number(c, "completed");
             r.deletedAt = number(c, "deleted"); r.purgeAfter = number(c, "purge_after");
             r.appVersion = text(c, "app_version");
         }
@@ -243,12 +243,50 @@ final class Store extends SQLiteOpenHelper {
         return list(search, view, sort, RecordFilter.none());
     }
 
-    record RecordFilter(String status, String usage, String unit, String county,
-                        boolean warnings, long from, long until) {
-        static RecordFilter none() { return new RecordFilter("", "", "", "", false, 0, Long.MAX_VALUE); }
+    enum AreaComparison {
+        ANY(""), EQUAL("="), GREATER(">"), LESS("<");
+        final String sql;
+        AreaComparison(String sql) { this.sql = sql; }
+    }
+
+    record RecordFilter(String status, String usage, AreaComparison comparison, double areaValue,
+                        Models.AreaUnit areaUnit, boolean warnings, long from, long until) {
+        RecordFilter {
+            if (comparison == null || areaUnit == null || !Double.isFinite(areaValue) || areaValue < 0
+                    || java.math.BigDecimal.valueOf(areaValue).stripTrailingZeros().scale() > 4)
+                throw new IllegalArgumentException("Invalid area comparison");
+            if (comparison == AreaComparison.ANY) { areaValue = 0; areaUnit = Models.AreaUnit.ACRE; }
+        }
+        static RecordFilter none() {
+            return new RecordFilter("", "", AreaComparison.ANY, 0, Models.AreaUnit.ACRE, false, 0, Long.MAX_VALUE);
+        }
     }
 
     List<Models.Record> list(String search, String view, String sort, RecordFilter filter) throws JSONException {
+        return records(recordQuery(search, view, sort, filter), 500, 0);
+    }
+
+    static final int RECORD_PAGE_SIZE = 10;
+
+    record RecordPage(List<Models.Record> records, int index, int total) {
+        int pageCount() { return total == 0 ? 1 : (total - 1) / RECORD_PAGE_SIZE + 1; }
+    }
+
+    RecordPage listPage(String search, String view, String sort, RecordFilter filter, int index) throws JSONException {
+        if (index < 0) throw new IllegalArgumentException("Page index cannot be negative");
+        RecordQuery query = recordQuery(search, view, sort, filter);
+        int total;
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*)" + query.fromWhere, query.arguments)) {
+            if (!c.moveToFirst()) throw new IllegalStateException("Record count unavailable");
+            total = c.getInt(0);
+        }
+        int actual = Math.min(index, Math.max(0, (total - 1) / RECORD_PAGE_SIZE));
+        return new RecordPage(records(query, RECORD_PAGE_SIZE, actual * RECORD_PAGE_SIZE), actual, total);
+    }
+
+    private record RecordQuery(String fromWhere, String order, String[] arguments) {}
+
+    private RecordQuery recordQuery(String search, String view, String sort, RecordFilter filter) {
         String selection = switch (view) {
             case "deleted" -> "deleted>0";
             case "archive" -> "deleted=0 AND status='ARCHIVED'";
@@ -268,24 +306,32 @@ final class Store extends SQLiteOpenHelper {
         };
         String escaped = search.toLowerCase(java.util.Locale.ROOT).replace("\\", "\\\\")
                 .replace("%", "\\%").replace("_", "\\_");
-        List<Models.Record> out = new ArrayList<>();
         List<String> arguments = new ArrayList<>();
         arguments.add("%" + escaped + "%");
         StringBuilder extra = new StringBuilder(" AND a.updated>=? AND a.updated<=?");
         arguments.add(Long.toString(filter.from)); arguments.add(Long.toString(filter.until));
         if (!filter.status.isEmpty()) { extra.append(" AND a.status=?"); arguments.add(filter.status); }
-        if (!filter.unit.isEmpty()) { extra.append(" AND a.unit=?"); arguments.add(filter.unit); }
+        if (filter.comparison != AreaComparison.ANY) {
+            extra.append(" AND ROUND(r.area / ?,4) ").append(filter.comparison.sql).append(" CAST(? AS REAL)");
+            arguments.add(Double.toString(filter.areaUnit.divisor));
+            arguments.add(Double.toString(filter.areaValue));
+        }
         if (filter.warnings) extra.append(" AND (r.worst>10 OR r.mock>0 OR r.overrides>0)");
         if (!filter.usage.isEmpty()) {
             extra.append(" AND a.usage=?"); arguments.add(filter.usage);
         }
-        if (!filter.county.isEmpty()) {
-            extra.append(" AND a.county=?"); arguments.add(filter.county.toLowerCase(java.util.Locale.ROOT));
-        }
-        try (Cursor c = getReadableDatabase().rawQuery(
-                "SELECT a.*,r.area,r.worst,r.mock,r.overrides,r.version AS result_version FROM activity a "
+        return new RecordQuery(" FROM activity a "
                 + "LEFT JOIN result r ON a.id=r.activity_id AND a.version=r.version WHERE " + selection
-                + " AND search_text LIKE ? ESCAPE '\\'" + extra + " ORDER BY " + order + " LIMIT 500",
+                + " AND search_text LIKE ? ESCAPE '\\'" + extra, order + ",a.id ASC", arguments.toArray(new String[0]));
+    }
+
+    private List<Models.Record> records(RecordQuery query, int limit, int offset) throws JSONException {
+        List<Models.Record> out = new ArrayList<>();
+        List<String> arguments = new ArrayList<>(List.of(query.arguments));
+        arguments.add(Integer.toString(limit)); arguments.add(Integer.toString(offset));
+        try (Cursor c = getReadableDatabase().rawQuery(
+                "SELECT a.*,r.area,r.worst,r.mock,r.overrides,r.version AS result_version" + query.fromWhere
+                + " ORDER BY " + query.order + " LIMIT ? OFFSET ?",
                 arguments.toArray(new String[0]))) {
             while (c.moveToNext()) {
                 Models.Record r = new Models.Record();
@@ -293,6 +339,7 @@ final class Store extends SQLiteOpenHelper {
                 r.status = Models.Status.valueOf(text(c, "status"));
                 r.unit = Models.AreaUnit.valueOf(text(c, "unit"));
                 r.metadata = new JSONObject(text(c, "metadata"));
+                r.created = number(c, "created"); r.completed = number(c, "completed");
                 r.updated = number(c, "updated"); r.purgeAfter = number(c, "purge_after");
                 r.deletedAt = number(c, "deleted"); r.hasResult = !c.isNull(c.getColumnIndexOrThrow("result_version"));
                 r.area = real(c, "area"); r.worst = real(c, "worst");
