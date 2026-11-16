@@ -72,7 +72,7 @@ final class Models {
     }
 
     static final class Record {
-        String id, title, mode, reason;
+        String id, title, mode, reason, appVersion;
         Status status;
         AreaUnit unit;
         JSONObject metadata = new JSONObject();

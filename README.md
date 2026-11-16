@@ -1,14 +1,16 @@
-# LandMeasure
+# GPSLandMeasure
 
 Native, offline-first Android implementation of the **MVP** in
 `FRD-LMA-001`, version 1.0, dated November 16, 2026.
 
 **Android 7.0 (API 24) minimum; Android 17 (API 37) target.**
 Application ID: `com.mogada.landmeasure`.
+Version 1.1.0 (version code 2). The application ID and database schema are
+unchanged so this build updates the existing evaluation app without losing records.
 
 ## Install
 
-Use `artifacts\LandMeasure-debug.apk` for device evaluation. It is signed with
+Use `artifacts\GPSLandMeasure-1.1.0-debug.apk` for device evaluation. It is signed with
 the development debug certificate, not a production distribution certificate.
 Transfer it to a phone and allow installation from the app used to open it.
 
@@ -18,8 +20,12 @@ Keep a future production keystore outside this repository.
 
 ## Included
 
-- Draft autosave, Ready validation, optional owner/contact/reference details,
-  Kenya-oriented location fields, and a GPS anchor independent of walking.
+- Seven registration inputs: activity title, owner/occupant, optional phone,
+  optional email, purpose/consent note, land usage and brief location description.
+  Draft autosave and existing Ready validation are retained. Hidden legacy
+  details remain stored and searchable when an older record is edited.
+- Separate **Measurement options** for area units, capture mode and GPS anchor,
+  keeping technical controls out of registration.
 - Precise foreground GPS readiness, automatic or manual corner capture,
   visible foreground notification, pause/resume, and immediate waypoint commits.
 - Accuracy, freshness, duplicate, speed, jump, monotonic-time and point-limit
@@ -39,6 +45,17 @@ Keep a future production keystore outside this repository.
   Owner contacts, identifiers and consent notes are not included.
 - Configurable capture defaults, independent distance units, haptic/audio
   feedback controls, and resource-based English UI strings.
+- **Display mode** defaults to **Use phone setting**, following the phone's
+  light/dark configuration automatically. Optional Light and Dark overrides
+  persist across restarts. Apply a choice with **Save settings**.
+- GPSLandMeasure branding with an original parcel-and-location-pin launcher
+  icon, including adaptive and monochrome variants.
+- Revisit a saved record and choose **Navigate to land**, then any waypoint,
+  to open Google Maps directions to that selected point. A paused walk offers
+  directions in each point's action menu. Confirmation shares only the chosen
+  coordinates, never owner/contact details. Maps opens first, with a browser
+  fallback and an explicit error if neither is available. The external service
+  may require internet; measurement and saved records remain offline.
 
 SQLite is accessed on a single background executor with foreign keys, WAL,
 transactional completion/checkpoints, and explicit schema versioning. The
@@ -79,14 +96,22 @@ production installation containing real user data: the test resets its database.
 
 Validation on November 16, 2026:
 
-- 28 JVM/Robolectric tests passed: geodesic reference fixtures, equator/high
+- 35 JVM/Robolectric tests passed: geodesic reference fixtures, equator/high
   latitude/antimeridian, invalid rings, a 10,000-vertex ring, capture filtering,
   recovery/reboot timing, transactional fault injection, foreign keys,
-  immutable snapshots, revisions, retention, search and combined filters.
-- Four instrumentation tests passed on **Android 7.0/API 24** and the same four
+  immutable snapshots, revisions, retention, search and combined filters;
+  phone-theme selection, persisted theme/legacy provenance, selected-waypoint
+  URL precision under comma-decimal locales and Maps/browser fallback failures.
+- Five instrumentation tests passed on **Android 7.0/API 24** and the same five
   passed on **Android 17/API 37**. They exercise draft UI autosave, review and
   completion UI, real device SQLite/recovery/filtering, foreground service GPS
-  delivery, mock indication and stopping point acceptance after Pause.
+  delivery, mock indication and stopping point acceptance after Pause. They also
+  verify the seven-input form preserves legacy metadata and capture choices,
+  selecting a non-first saved waypoint, and persistent light/dark overrides.
+  API 37 additionally exercises automatic phone-theme changes while open.
+- An in-place installation over version 1.0.0 on API 37 preserved a fixture
+  record, legacy metadata, original app provenance and all four waypoints;
+  database integrity and schema version 1 were retained.
 - Strict debug lint passed; optimized release compilation and resource/code
   shrinking passed. JUnit XML results are retained in `verification`.
 

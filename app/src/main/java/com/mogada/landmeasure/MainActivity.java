@@ -5,7 +5,7 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
+import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.location.Location;
@@ -54,7 +54,8 @@ import java.util.Locale;
 import java.util.Map;
 
 public final class MainActivity extends ComponentActivity implements LocationListener {
-    private static final int GREEN = 0xFF174E3C, INK = 0xFF17362D, MUTED = 0xFF52645C;
+    private AppTheme.Palette colors;
+    private String appliedTheme;
     private static final int[] STATUS_LABELS = {R.string.status_draft, R.string.status_ready,
             R.string.status_active, R.string.status_paused, R.string.status_completed,
             R.string.status_cancelled, R.string.status_archived};
@@ -79,7 +80,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
     private Button startButton;
     private EditText titleInput;
     private final Map<String, EditText> fields = new LinkedHashMap<>();
-    private Spinner unitInput, modeInput, usageInput, sourceInput;
+    private Spinner usageInput;
     private JSONObject editorMetadata;
     private Runnable afterPause;
     private Store.RecordFilter recordFilter = Store.RecordFilter.none();
@@ -112,11 +113,14 @@ public final class MainActivity extends ComponentActivity implements LocationLis
     };
 
     @Override public void onCreate(Bundle state) {
+        app = (LandApp) getApplication();
+        appliedTheme = app.theme;
+        setTheme(AppTheme.style(appliedTheme, getResources().getConfiguration()));
         super.onCreate(state);
+        colors = new AppTheme.Palette(this);
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() { navigateBack(); }
         });
-        app = (LandApp) getApplication();
         locations = getSystemService(LocationManager.class);
         if (state != null) {
             id = state.getString("id"); page = state.getString("page", "home");
@@ -139,8 +143,10 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         app.run(() -> new String[]{app.store.setting("onboarding", "false"),
                 app.store.setting("sort", "updated")}, values -> {
             if (isFinishing() || isDestroyed()) return;
+            if (!appliedTheme.equals(app.theme)) { recreate(); return; }
             sort = values[1];
             if (!"true".equals(values[0])) onboarding();
+            else if ("settings".equals(page)) settings();
             else if (id != null && !"home".equals(page) && !"settings".equals(page)) {
                 if ("editor".equals(page)) editor(id); else loadDetail(false);
             } else home();
@@ -198,7 +204,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         stopReadiness();
         page = next;
         LinearLayout shell = new LinearLayout(this); shell.setOrientation(LinearLayout.VERTICAL);
-        shell.setBackgroundColor(0xFFF5F7F1);
+        shell.setBackgroundColor(colors.background);
         shell.setOnApplyWindowInsetsListener((v, insets) -> {
             if (Build.VERSION.SDK_INT >= 30) {
                 android.graphics.Insets bars = insets.getInsets(
@@ -213,7 +219,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
             Button backButton = button(R.string.back, this::navigateBack);
             header.addView(backButton);
         }
-        TextView brand = text(getString(R.string.app_name), 24, GREEN);
+        TextView brand = text(getString(R.string.app_name), 24, colors.primary);
         brand.setTypeface(null, Typeface.BOLD);
         LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, -2, 1);
         brandParams.setMarginStart(dp(10)); header.addView(brand, brandParams);
@@ -277,9 +283,9 @@ public final class MainActivity extends ComponentActivity implements LocationLis
                 if (!"home".equals(page) || !wantedSearch.equals(search) || !wantedView.equals(view)) return;
                 results.removeAllViews();
                 if (records.isEmpty()) {
-                    TextView empty = text(getString(search.isEmpty() ? R.string.no_records : R.string.no_matches), 21, INK);
+                    TextView empty = text(getString(search.isEmpty() ? R.string.no_records : R.string.no_matches), 21, colors.text);
                     results.addView(empty);
-                    if (search.isEmpty()) results.addView(text(getString(R.string.no_records_body), 16, MUTED));
+                    if (search.isEmpty()) results.addView(text(getString(R.string.no_records_body), 16, colors.muted));
                 }
                 for (Models.Record r : records) {
                     String title = r.title.isBlank() ? getString(R.string.new_title) : r.title;
@@ -294,7 +300,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
                     Button card = button(summary, () -> open(r.id)); card.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
                     card.setBackground(cardBackground()); results.addView(card, spaced());
                 }
-                if (records.size() == 500) results.addView(text(getString(R.string.showing_limit), 14, MUTED));
+                if (records.size() == 500) results.addView(text(getString(R.string.showing_limit), 14, colors.muted));
             }, this::error);
         };
         query.addTextChangedListener(watcher(() -> {
@@ -318,41 +324,20 @@ public final class MainActivity extends ComponentActivity implements LocationLis
             body(R.string.draft_hint);
             titleInput = labeledInput(R.string.title_label, r.title, 200);
             titleInput.addTextChangedListener(watcher(this::dirty));
-            for (int i = 0; i < Fields.KEYS.length; i++) {
-                String key = Fields.KEYS[i];
+            for (int i = 0; i < Fields.FORM_KEYS.length; i++) {
+                String key = Fields.FORM_KEYS[i];
                 if ("usage".equals(key)) {
                     label(R.string.usage);
                     usageInput = spinner(USAGE_LABELS, indexOf(Fields.USAGES, r.metadata.optString("usage")));
                     content.addView(usageInput); selection(usageInput, this::dirty);
-                } else if ("reference_source".equals(key)) {
-                    label(R.string.reference_source);
-                    sourceInput = spinner(new int[]{R.string.source_user, R.string.source_document, R.string.source_unknown},
-                            indexOf(new String[]{"user", "document", "unknown"}, r.metadata.optString(key)));
-                    content.addView(sourceInput); selection(sourceInput, this::dirty);
                 } else {
-                    EditText field = labeledInput(Fields.LABELS[i], r.metadata.optString(key), Fields.limit(key));
+                    EditText field = labeledInput(Fields.FORM_LABELS[i], r.metadata.optString(key), Fields.limit(key));
                     if ("email".equals(key)) field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
                     if ("phone".equals(key)) field.setInputType(InputType.TYPE_CLASS_PHONE);
                     if (Fields.limit(key) > 200) field.setMinLines(2);
                     fields.put(key, field); field.addTextChangedListener(watcher(this::dirty));
                 }
             }
-            label(R.string.unit);
-            unitInput = spinner(unitLabels(), r.unit.ordinal()); content.addView(unitInput); selection(unitInput, this::dirty);
-            label(R.string.capture_mode);
-            modeInput = spinner(new int[]{R.string.mode_auto, R.string.mode_manual}, "MANUAL".equals(r.mode) ? 1 : 0);
-            modeInput.setEnabled(r.version == 0); content.addView(modeInput); selection(modeInput, this::dirty);
-            body(R.string.mode_hint);
-            if (r.metadata.has("anchor_lat")) {
-                body(getString(R.string.anchor_detail, number(r.metadata.optDouble("anchor_lat"), 7),
-                        number(r.metadata.optDouble("anchor_lon"), 7), number(r.metadata.optDouble("anchor_accuracy"), 1)));
-                secondary(R.string.remove_anchor, () -> {
-                    editorMetadata.remove("anchor_lat"); editorMetadata.remove("anchor_lon");
-                    editorMetadata.remove("anchor_accuracy"); editorMetadata.remove("anchor_time");
-                    dirty(); saveEditor(() -> editor(id));
-                });
-            }
-            secondary(R.string.anchor, () -> saveEditor(() -> readiness(true)));
             saveState = body(R.string.saved);
             secondary(R.string.retry, () -> saveEditor(null));
             primary(R.string.save_draft, () -> saveEditor(() -> open(id)));
@@ -406,10 +391,9 @@ public final class MainActivity extends ComponentActivity implements LocationLis
             for (Map.Entry<String, EditText> field : fields.entrySet())
                 data.put(field.getKey(), field.getValue().getText().toString().trim());
             data.put("usage", Fields.USAGES[usageInput.getSelectedItemPosition()]);
-            data.put("reference_source", new String[]{"user", "document", "unknown"}[sourceInput.getSelectedItemPosition()]);
         } catch (JSONException e) { error(e); return; }
-        Models.AreaUnit unit = Models.AreaUnit.values()[unitInput.getSelectedItemPosition()];
-        String mode = modeInput.getSelectedItemPosition() == 0 ? "AUTO" : "MANUAL";
+        Models.AreaUnit unit = record.unit;
+        String mode = record.mode;
         editorDirty = false;
         if (saveState != null) saveState.setText(R.string.saving);
         app.run(() -> { app.store.saveMetadata(activityId, title, data, unit, mode); return null; }, ignored -> {
@@ -514,8 +498,11 @@ public final class MainActivity extends ComponentActivity implements LocationLis
             if (r.status == Models.Status.CANCELLED)
                 secondary(R.string.discard_capture, () -> confirm(R.string.confirm_discard, () -> action("discard", () -> editor(id))));
             secondary(R.string.edit_metadata, () -> editor(id));
+            if (r.status != Models.Status.IN_PROGRESS) secondary(R.string.measurement_options, this::measurementOptions);
         }
         if (!r.points.isEmpty()) secondary(R.string.points, () -> { pointOffset = 0; showPoints(); });
+        if (!r.points.isEmpty() && r.deletedAt == 0 && r.status != Models.Status.IN_PROGRESS)
+            secondary(R.string.navigate_to_land, () -> { pointOffset = 0; showPoints(); });
         if (r.status != Models.Status.IN_PROGRESS && r.deletedAt == 0) {
             secondary(R.string.duplicate, () -> app.run(() -> {
                 String copy = app.store.duplicate(id);
@@ -535,9 +522,39 @@ public final class MainActivity extends ComponentActivity implements LocationLis
             String value = r.metadata.optString(Fields.KEYS[i]);
             if (!value.isBlank()) body(getString(Fields.LABELS[i]) + ": " + metadataValue(Fields.KEYS[i], value));
         }
-        body(getString(R.string.record_provenance, date(r.created), date(r.updated), r.version));
+        body(getString(R.string.record_provenance, date(r.created), date(r.updated), r.version, r.appVersion));
         warning(getString(R.string.disclaimer));
         scroll.post(() -> scroll.scrollTo(0, position));
+    }
+
+    private void measurementOptions() {
+        Models.Record r = record;
+        LinearLayout form = dialogLayout();
+        form.addView(text(getString(R.string.unit), 14, colors.text));
+        Spinner units = spinner(unitLabels(), r.unit.ordinal()); form.addView(units);
+        form.addView(text(getString(R.string.capture_mode), 14, colors.text));
+        Spinner mode = spinner(new int[]{R.string.mode_auto, R.string.mode_manual}, "MANUAL".equals(r.mode) ? 1 : 0);
+        mode.setEnabled(r.version == 0); form.addView(mode);
+        form.addView(text(getString(R.string.mode_hint), 14, colors.muted));
+        boolean anchored = r.metadata.has("anchor_lat");
+        if (anchored) form.addView(text(getString(R.string.anchor_detail,
+                number(r.metadata.optDouble("anchor_lat"), 7), number(r.metadata.optDouble("anchor_lon"), 7),
+                number(r.metadata.optDouble("anchor_accuracy"), 1)), 14, colors.text));
+        new DialogBuilder().setTitle(R.string.measurement_options).setView(form)
+                .setPositiveButton(R.string.confirm, (dialog, which) -> {
+                    Models.AreaUnit unit = Models.AreaUnit.values()[units.getSelectedItemPosition()];
+                    String selectedMode = mode.getSelectedItemPosition() == 0 ? "AUTO" : "MANUAL";
+                    app.run(() -> { app.store.saveMetadata(r.id, r.title, r.metadata, unit, selectedMode); return null; },
+                            ignored -> open(r.id), this::error);
+                }).setNeutralButton(anchored ? R.string.remove_anchor : R.string.anchor, (dialog, which) -> {
+                    if (!anchored) readiness(true);
+                    else app.run(() -> {
+                        JSONObject metadata = new JSONObject(r.metadata.toString());
+                        metadata.remove("anchor_lat"); metadata.remove("anchor_lon");
+                        metadata.remove("anchor_accuracy"); metadata.remove("anchor_time");
+                        app.store.saveMetadata(r.id, r.title, metadata, r.unit, r.mode); return null;
+                    }, ignored -> open(r.id), this::error);
+                }).setNegativeButton(R.string.cancel, null).show();
     }
 
     private void pauseCapture() {
@@ -744,6 +761,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         String activityId = id;
         app.run(() -> app.store.load(activityId), r -> {
             record = r; screen("points", R.string.points, true); body(R.string.undo_limit);
+            if (r.deletedAt == 0 && r.status != Models.Status.IN_PROGRESS) body(R.string.maps_point_hint);
             Geometry.Result geometry = Geometry.calculate(r.points);
             if (!geometry.valid()) warning(geometryMessage(geometry));
             int end = Math.min(r.points.size(), pointOffset + 50);
@@ -757,6 +775,8 @@ public final class MainActivity extends ComponentActivity implements LocationLis
                 int index = i;
                 if (r.status == Models.Status.PAUSED && r.editable())
                     content.addView(button(value, () -> pointActions(index)), spaced());
+                else if (r.deletedAt == 0 && r.status != Models.Status.IN_PROGRESS)
+                    content.addView(button(value, () -> navigateToPoint(point, index)), spaced());
                 else body(value);
             }
             if (pointOffset > 0) secondary(R.string.previous_page, () -> { pointOffset -= 50; showPoints(); });
@@ -768,11 +788,25 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         }, this::error);
     }
 
+    private void navigateToPoint(Models.Point point, int index) {
+        String activityId = record.id;
+        new DialogBuilder().setTitle(R.string.maps_directions)
+                .setMessage(getString(R.string.maps_confirmation, index + 1, number(point.lat, 7), number(point.lon, 7)))
+                .setPositiveButton(R.string.open_maps, (dialog, which) ->
+                        app.run(() -> { app.store.event(activityId, "MAP_DIRECTIONS_REQUESTED"); return null; }, ignored -> {
+                            try { MapDirections.open(this, point); }
+                            catch (android.content.ActivityNotFoundException e) { message(R.string.maps_unavailable); }
+                        }, this::error))
+                .setNegativeButton(R.string.cancel, null).show();
+    }
+
     private void pointActions(int index) {
         String[] actions = {getString(R.string.edit_coordinates), getString(R.string.replace_gps),
-                getString(R.string.move_up), getString(R.string.move_down), getString(R.string.delete_point)};
+                getString(R.string.move_up), getString(R.string.move_down), getString(R.string.delete_point),
+                getString(R.string.maps_directions)};
         new DialogBuilder().setTitle(getString(R.string.point_actions, index + 1)).setItems(actions, (dialog, which) -> {
-            if (which == 0) editPoint(index);
+            if (which == 5) navigateToPoint(record.points.get(index), index);
+            else if (which == 0) editPoint(index);
             else if (which == 1) {
                 Location chosen = fix;
                 if (chosen == null || !chosen.hasAccuracy() || age(chosen) > 10 || age(chosen) < 0) {
@@ -803,9 +837,9 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         EditText longitude = input(getString(R.string.longitude), number(old.lon, 8), 30);
         latitude.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL | InputType.TYPE_NUMBER_FLAG_SIGNED);
         longitude.setInputType(latitude.getInputType());
-        form.addView(text(getString(R.string.latitude), 14, INK)); form.addView(latitude);
-        form.addView(text(getString(R.string.longitude), 14, INK)); form.addView(longitude);
-        form.addView(text(getString(R.string.edited_accuracy), 14, MUTED));
+        form.addView(text(getString(R.string.latitude), 14, colors.text)); form.addView(latitude);
+        form.addView(text(getString(R.string.longitude), 14, colors.text)); form.addView(longitude);
+        form.addView(text(getString(R.string.edited_accuracy), 14, colors.muted));
         AlertDialog dialog = new DialogBuilder().setTitle(R.string.edit_coordinates).setView(form)
                 .setPositiveButton(R.string.confirm, null).setNegativeButton(R.string.cancel, null).create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
@@ -859,8 +893,8 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         Models.Record r = record;
         LinearLayout form = dialogLayout();
         CheckBox coordinates = check(getString(R.string.include_coordinates), false);
-        TextView preview = text(shareText(r, false), 15, INK);
-        form.addView(text(getString(R.string.share_privacy), 15, MUTED));
+        TextView preview = text(shareText(r, false), 15, colors.text);
+        form.addView(text(getString(R.string.share_privacy), 15, colors.muted));
         form.addView(coordinates); form.addView(preview);
         coordinates.setOnCheckedChangeListener((button, checked) -> preview.setText(shareText(r, checked)));
         ScrollView container = new ScrollView(this); container.addView(form);
@@ -892,8 +926,13 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         app.run(() -> new String[]{app.store.setting("unit", "ACRE"), app.store.setting("mode", "AUTO"),
                 app.store.setting("accuracy", "10"), app.store.setting("movement", "3"),
                 app.store.setting("haptic", "true"), app.store.setting("audio", "false"),
-                app.store.setting("distance", "m")}, values -> {
+                app.store.setting("distance", "m"), app.store.setting("theme", AppTheme.SYSTEM)}, values -> {
             screen("settings", R.string.settings, true);
+            label(R.string.display_theme);
+            Spinner theme = spinner(new int[]{R.string.theme_system, R.string.theme_light, R.string.theme_dark},
+                    indexOf(AppTheme.MODES, values[7]));
+            theme.setContentDescription(getString(R.string.display_theme)); content.addView(theme);
+            body(R.string.theme_hint);
             label(R.string.default_unit);
             Spinner units = spinner(unitLabels(), Models.AreaUnit.valueOf(values[0]).ordinal()); content.addView(units);
             label(R.string.default_mode);
@@ -922,6 +961,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
                 String selectedUnit = Models.AreaUnit.values()[units.getSelectedItemPosition()].name();
                 String selectedMode = mode.getSelectedItemPosition() == 0 ? "AUTO" : "MANUAL";
                 String selectedDistance = distances.getSelectedItemPosition() == 0 ? "m" : "km";
+                String selectedTheme = AppTheme.MODES[theme.getSelectedItemPosition()];
                 boolean hapticEnabled = haptic.isChecked(), audioEnabled = audio.isChecked();
                 app.run(() -> {
                     app.store.putSetting("unit", selectedUnit); app.store.putSetting("mode", selectedMode);
@@ -929,15 +969,19 @@ public final class MainActivity extends ComponentActivity implements LocationLis
                     app.store.putSetting("movement", Double.toString(minMovement));
                     app.store.putSetting("distance", selectedDistance);
                     app.store.putSetting("haptic", Boolean.toString(hapticEnabled));
-                    app.store.putSetting("audio", Boolean.toString(audioEnabled)); return null;
-                }, ignored -> { message(R.string.saved); home(); }, this::error);
+                    app.store.putSetting("audio", Boolean.toString(audioEnabled));
+                    app.store.putSetting("theme", selectedTheme); app.theme = selectedTheme; return null;
+                }, ignored -> {
+                    message(R.string.saved);
+                    if (!appliedTheme.equals(selectedTheme)) recreate(); else settings();
+                }, this::error);
             });
             secondary(R.string.reset_settings, () -> app.run(() -> {
                 app.store.putSetting("accuracy", "10"); app.store.putSetting("movement", "3");
                 app.store.putSetting("mode", "AUTO"); return null;
             }, ignored -> settings(), this::error));
             secondary(R.string.recently_deleted, () -> { view = "deleted"; home(); });
-            gap(12); body(R.string.privacy_body); warning(getString(R.string.disclaimer));
+            gap(12); body(getString(R.string.privacy_body, BuildConfig.VERSION_NAME)); warning(getString(R.string.disclaimer));
         }, this::error);
     }
 
@@ -946,20 +990,20 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         int[] statuses = new int[STATUS_LABELS.length + 1]; statuses[0] = R.string.any;
         System.arraycopy(STATUS_LABELS, 0, statuses, 1, STATUS_LABELS.length);
         int statusIndex = recordFilter.status().isEmpty() ? 0 : Models.Status.valueOf(recordFilter.status()).ordinal() + 1;
-        Spinner status = spinner(statuses, statusIndex); form.addView(text(getString(R.string.sort_status), 14, INK)); form.addView(status);
+        Spinner status = spinner(statuses, statusIndex); form.addView(text(getString(R.string.sort_status), 14, colors.text)); form.addView(status);
         int[] usages = new int[USAGE_LABELS.length + 1]; usages[0] = R.string.any;
         System.arraycopy(USAGE_LABELS, 0, usages, 1, USAGE_LABELS.length);
         Spinner usage = spinner(usages, recordFilter.usage().isEmpty() ? 0 : indexOf(Fields.USAGES, recordFilter.usage()) + 1);
-        form.addView(text(getString(R.string.usage), 14, INK)); form.addView(usage);
+        form.addView(text(getString(R.string.usage), 14, colors.text)); form.addView(usage);
         int[] units = {R.string.any, R.string.unit_m2, R.string.unit_ha, R.string.unit_acre, R.string.unit_km2};
         Spinner unit = spinner(units, recordFilter.unit().isEmpty() ? 0 : Models.AreaUnit.valueOf(recordFilter.unit()).ordinal() + 1);
-        form.addView(text(getString(R.string.unit), 14, INK)); form.addView(unit);
+        form.addView(text(getString(R.string.unit), 14, colors.text)); form.addView(unit);
         EditText county = input(getString(R.string.county), recordFilter.county(), 200);
-        form.addView(text(getString(R.string.county), 14, INK)); form.addView(county);
+        form.addView(text(getString(R.string.county), 14, colors.text)); form.addView(county);
         EditText from = input(getString(R.string.from_date), isoDate(recordFilter.from()), 10);
         EditText until = input(getString(R.string.until_date), isoDate(recordFilter.until()), 10);
-        form.addView(text(getString(R.string.from_date), 14, INK)); form.addView(from);
-        form.addView(text(getString(R.string.until_date), 14, INK)); form.addView(until);
+        form.addView(text(getString(R.string.from_date), 14, colors.text)); form.addView(from);
+        form.addView(text(getString(R.string.until_date), 14, colors.text)); form.addView(until);
         CheckBox warnings = check(getString(R.string.warning_only), recordFilter.warnings()); form.addView(warnings);
         ScrollView container = new ScrollView(this); container.addView(form);
         AlertDialog dialog = new DialogBuilder().setTitle(R.string.filters).setView(container)
@@ -1037,6 +1081,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
             case "CANCELLED" -> R.string.event_cancel;
             case "CAPTURE_DISCARDED" -> R.string.event_discard;
             case "TEXT_SHARE", "TEXT_SHARE_WITH_COORDINATES" -> R.string.event_share;
+            case "MAP_DIRECTIONS_REQUESTED" -> R.string.event_maps;
             case "CLOCK_ANOMALY" -> R.string.event_clock;
             case "DUPLICATED_METADATA" -> R.string.event_duplicate;
             default -> R.string.event_warning;
@@ -1115,43 +1160,47 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         view.setPadding(0, dp(5), 0, dp(5)); return view;
     }
     private void heading(String value) {
-        TextView title = text(value, 28, INK); title.setTypeface(null, Typeface.BOLD); content.addView(title);
+        TextView title = text(value, 28, colors.text); title.setTypeface(null, Typeface.BOLD); content.addView(title);
         if (Build.VERSION.SDK_INT >= 28) title.setAccessibilityHeading(true);
     }
     private void hero(String value) {
-        TextView text = text(value, 36, GREEN); text.setTypeface(null, Typeface.BOLD); content.addView(text);
+        TextView text = text(value, 36, colors.primary); text.setTypeface(null, Typeface.BOLD); content.addView(text);
     }
     private TextView body(int value) { return body(getString(value)); }
     private TextView body(String value) {
-        TextView view = text(value, 16, INK); content.addView(view); return view;
+        TextView view = text(value, 16, colors.text); content.addView(view); return view;
     }
     private void note(int value) { note(getString(value)); }
-    private void note(String value) { content.addView(text(value, 12, MUTED)); }
+    private void note(String value) { content.addView(text(value, 12, colors.muted)); }
     private void label(int value) {
-        TextView label = text(getString(value), 14, INK); label.setTypeface(null, Typeface.BOLD); content.addView(label);
+        TextView label = text(getString(value), 14, colors.text); label.setTypeface(null, Typeface.BOLD); content.addView(label);
     }
     private void warning(String value) {
-        TextView warning = text(value, 15, 0xFF5C4514);
+        TextView warning = text(value, 15, colors.warningText);
         warning.setPadding(dp(14), dp(12), dp(14), dp(12));
-        GradientDrawable background = new GradientDrawable(); background.setColor(0xFFF3E8CA);
+        GradientDrawable background = new GradientDrawable(); background.setColor(colors.warningBackground);
         background.setCornerRadius(dp(10)); warning.setBackground(background); content.addView(warning, spaced());
     }
     private Button button(int value, Runnable action) { return button(getString(value), action); }
     private Button button(String value, Runnable action) {
         Button button = new Button(this); button.setText(value); button.setAllCaps(false);
-        button.setTextSize(16); button.setMinHeight(dp(52)); button.setTextColor(GREEN);
+        button.setTextSize(16); button.setMinHeight(dp(52)); button.setTextColor(colors.primary);
         button.setOnClickListener(v -> action.run()); return button;
     }
     private Button primary(int value, Runnable action) {
         Button button = button(value, action);
-        GradientDrawable shape = new GradientDrawable(); shape.setColor(GREEN); shape.setCornerRadius(dp(12));
-        button.setBackground(shape); button.setTextColor(Color.WHITE); button.setPadding(dp(16), dp(12), dp(16), dp(12));
+        GradientDrawable shape = new GradientDrawable(); shape.setColor(colors.primary); shape.setCornerRadius(dp(12));
+        int[][] states = {new int[]{-android.R.attr.state_enabled}, new int[]{}};
+        button.setBackground(shape);
+        button.setBackgroundTintList(new ColorStateList(states, new int[]{colors.outline, colors.primary}));
+        button.setTextColor(new ColorStateList(states, new int[]{colors.muted, colors.onPrimary}));
+        button.setPadding(dp(16), dp(12), dp(16), dp(12));
         content.addView(button, spaced()); return button;
     }
     private void secondary(int value, Runnable action) { content.addView(button(value, action), spaced()); }
     private GradientDrawable cardBackground() {
-        GradientDrawable shape = new GradientDrawable(); shape.setColor(Color.WHITE);
-        shape.setCornerRadius(dp(12)); shape.setStroke(dp(1), 0xFFDCE4D8); return shape;
+        GradientDrawable shape = new GradientDrawable(); shape.setColor(colors.surface);
+        shape.setCornerRadius(dp(12)); shape.setStroke(dp(1), colors.outline); return shape;
     }
     private LinearLayout.LayoutParams spaced() {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
@@ -1164,7 +1213,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
     private void gap(int size) { View gap = new View(this); content.addView(gap, new LinearLayout.LayoutParams(1, dp(size))); }
     private EditText input(String hint, String value, int limit) {
         EditText input = new EditText(this); input.setText(value); input.setHint(hint);
-        input.setContentDescription(hint); input.setTextColor(INK); input.setTextSize(16);
+        input.setContentDescription(hint); input.setTextColor(colors.text); input.setHintTextColor(colors.muted); input.setTextSize(16);
         input.setMinHeight(dp(52)); input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(limit)});
         input.setSelectAllOnFocus(false); return input;
     }
@@ -1193,7 +1242,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         });
     }
     private CheckBox check(String label, boolean checked) {
-        CheckBox box = new CheckBox(this); box.setText(label); box.setTextSize(16); box.setTextColor(INK);
+        CheckBox box = new CheckBox(this); box.setText(label); box.setTextSize(16); box.setTextColor(colors.text);
         box.setMinHeight(dp(52)); box.setChecked(checked); return box;
     }
     private LinearLayout dialogLayout() {

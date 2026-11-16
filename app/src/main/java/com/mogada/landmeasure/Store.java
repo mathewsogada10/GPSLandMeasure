@@ -152,6 +152,7 @@ final class Store extends SQLiteOpenHelper {
             v.put("id", id); v.put("title", ""); v.put("status", "DRAFT");
             v.put("unit", setting("unit", "ACRE")); v.put("mode", setting("mode", "AUTO"));
             v.put("metadata", "{}"); v.put("search_text", "");
+            v.put("app_version", BuildConfig.VERSION_NAME);
             v.put("created", now); v.put("updated", now);
             getWritableDatabase().insertOrThrow("activity", null, v);
             event(id, "CREATED");
@@ -213,6 +214,7 @@ final class Store extends SQLiteOpenHelper {
             r.metadata = new JSONObject(text(c, "metadata")); r.version = integer(c, "version");
             r.created = number(c, "created"); r.updated = number(c, "updated");
             r.deletedAt = number(c, "deleted"); r.purgeAfter = number(c, "purge_after");
+            r.appVersion = text(c, "app_version");
         }
         if (r.version > 0) {
             try (Cursor c = getReadableDatabase().rawQuery("SELECT * FROM geometry WHERE activity_id=? AND version=?",

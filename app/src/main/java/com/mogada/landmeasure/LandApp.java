@@ -24,6 +24,7 @@ public final class LandApp extends Application {
     volatile CaptureRules.Decision lastDecision;
     volatile String failure;
     volatile boolean initialized;
+    volatile String theme = AppTheme.SYSTEM;
     List<String> recovered = List.of();
 
     @Override public void onCreate() {
@@ -32,6 +33,7 @@ public final class LandApp extends Application {
         io.execute(() -> {
             try {
                 recovered = store.initialize();
+                theme = store.setting("theme", AppTheme.SYSTEM);
                 initialized = true;
             } catch (Exception e) { failure = "DATABASE_UNAVAILABLE"; }
             publish();

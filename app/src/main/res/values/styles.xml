@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.LandMeasure" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#24634D</item>
@@ -7,5 +7,42 @@
         <item name="android:navigationBarColor">#F5F7F1</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowBackground">#F5F7F1</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+        <item name="lmBackground">#F5F7F1</item>
+        <item name="lmSurface">#FFFFFF</item>
+        <item name="lmPrimary">#174E3C</item>
+        <item name="lmOnPrimary">#FFFFFF</item>
+        <item name="lmText">#17362D</item>
+        <item name="lmMuted">#52645C</item>
+        <item name="lmOutline">#DCE4D8</item>
+        <item name="lmWarningBackground">#F3E8CA</item>
+        <item name="lmWarningText">#5C4514</item>
+        <item name="lmCanvasBackground">#E5EDE0</item>
+        <item name="lmCanvasGrid">#D3DECD</item>
+        <item name="lmCanvasLine">#24634D</item>
+        <item name="lmCanvasFill">#3024634D</item>
     </style>
+    <style name="Theme.LandMeasure.Dark" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#A5D6A7</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#111D17</item>
+        <item name="android:navigationBarColor">#111D17</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#111D17</item>
+        <item name="lmBackground">#111D17</item>
+        <item name="lmSurface">#1C2C25</item>
+        <item name="lmPrimary">#A5D6A7</item>
+        <item name="lmOnPrimary">#0C3023</item>
+        <item name="lmText">#E2EEE6</item>
+        <item name="lmMuted">#AEC2B6</item>
+        <item name="lmOutline">#3D5549</item>
+        <item name="lmWarningBackground">#43391F</item>
+        <item name="lmWarningText">#F8DFA1</item>
+        <item name="lmCanvasBackground">#142C23</item>
+        <item name="lmCanvasGrid">#294137</item>
+        <item name="lmCanvasLine">#ACDBA0</item>
+        <item name="lmCanvasFill">#40ACDBA0</item>
+    </style>
+    <style name="Theme.LandMeasure.Starting" parent="Theme.LandMeasure" />
 </resources>

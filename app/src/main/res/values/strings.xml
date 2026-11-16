@@ -1,8 +1,8 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name">LandMeasure</string>
+    <string name="app_name">GPSLandMeasure</string>
     <string name="tagline">FIELD NOTES. GROUNDED ESTIMATES.</string>
     <string name="welcome">Measure with confidence.\nUnderstand the limits.</string>
-    <string name="onboarding">Walk a boundary, review the points, and keep an estimated area on this phone. No account, internet connection, or map download is needed.\n\nOwner and location data stay in private app storage unless you explicitly share them. Uninstalling the app removes its records.</string>
+    <string name="onboarding">Walk a boundary, review the points, and keep an estimated area on this phone. No account, internet connection, or map download is needed to measure.\n\nOwner and location data stay in private app storage unless you share them. Opening a waypoint in Google Maps sends only its coordinates. Uninstalling the app removes its records.</string>
     <string name="disclaimer">Estimate only — not a legal boundary, title plan, cadastral or certified survey. Phone GPS can be affected by trees, buildings, terrain and satellite conditions. For boundary decisions, consult official records and a licensed surveyor.</string>
     <string name="agree">I understand — continue</string>
     <string name="safety">Stay aware of roads, animals, terrain and private property. Pause whenever your attention is needed. Never enter unsafe or inaccessible land to finish a boundary.</string>
@@ -49,7 +49,7 @@
     <string name="consent">Purpose / consent note</string>
     <string name="usage">Land usage *</string>
     <string name="usage_text">Usage details</string>
-    <string name="location">Location description *</string>
+    <string name="location">Brief location description *</string>
     <string name="county">County</string>
     <string name="subcounty">Sub-county</string>
     <string name="ward">Ward</string>
@@ -68,7 +68,7 @@
     <string name="source_user">User supplied</string>
     <string name="source_document">Document observed (not verified)</string>
     <string name="source_unknown">Unknown</string>
-    <string name="draft_hint">Drafts may be incomplete. Ready / Start requires a title, usage, and location description or GPS anchor. Owner details are optional.</string>
+    <string name="draft_hint">Keep it brief. Only title, land usage and location are needed to mark Ready. Owner, phone, email and purpose details are optional. Drafts can be saved incomplete.</string>
     <string name="save_draft">Save &amp; return</string>
     <string name="saved">Saved on this phone</string>
     <string name="saving">Saving…</string>
@@ -78,8 +78,9 @@
     <string name="required">This field is required</string>
     <string name="invalid_email">Enter a valid email address or leave blank</string>
     <string name="invalid_phone">Enter a valid phone number or leave blank</string>
-    <string name="metadata">Land &amp; owner details</string>
-    <string name="edit_metadata">Edit details / display unit</string>
+    <string name="metadata">Activity details</string>
+    <string name="edit_metadata">Edit activity details</string>
+    <string name="measurement_options">Measurement options</string>
     <string name="unit">Area unit</string>
     <string name="unit_m2">m²</string>
     <string name="unit_ha">ha</string>
@@ -143,7 +144,7 @@
     <string name="remove_anchor">Remove GPS anchor</string>
     <string name="anchor_detail">GPS anchor: %1$s, %2$s · ±%3$s m</string>
     <string name="capture_channel">Active boundary capture</string>
-    <string name="capture_notification">LandMeasure · active GPS walk</string>
+    <string name="capture_notification">GPSLandMeasure · active GPS walk</string>
     <string name="capture_starting">Preparing your measurement</string>
     <string name="capture_running">Recording locally. Tap to return or Pause to stop GPS.</string>
     <string name="provisional">PROVISIONAL ESTIMATE</string>
@@ -202,7 +203,7 @@
     <string name="purge_date">Scheduled permanent deletion: %1$s</string>
     <string name="history">Activity history</string>
     <string name="history_row">%1$s\n%2$s · geometry v%3$d · local</string>
-    <string name="record_provenance">Created %1$s\nModified %2$s\nGeometry v%3$d · app 1.0.0 · SQLite schema 1</string>
+    <string name="record_provenance">Created %1$s\nModified %2$s\nGeometry v%3$d · app %4$s · SQLite schema 1</string>
     <string name="event_created">Draft created</string>
     <string name="event_metadata">Metadata saved</string>
     <string name="event_ready">Marked Ready</string>
@@ -222,6 +223,7 @@
     <string name="event_cancel">Attempt cancelled</string>
     <string name="event_discard">Capture detached from draft</string>
     <string name="event_share">Text sharing invoked</string>
+    <string name="event_maps">Google Maps directions requested</string>
     <string name="event_clock">Device clock moved backwards</string>
     <string name="event_warning">Capture interrupted / warning recorded</string>
     <string name="event_duplicate">Details duplicated</string>
@@ -234,6 +236,17 @@
     <string name="share_chooser">Share measurement estimate</string>
     <string name="default_unit">Default area unit</string>
     <string name="default_mode">Default capture mode</string>
+    <string name="display_theme">Display mode</string>
+    <string name="theme_system">Use phone setting (default)</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_hint">Use phone setting follows the phone’s light or dark theme automatically. Choose Light or Dark to override it for this app. Apply with Save settings.</string>
+    <string name="navigate_to_land">Navigate to land · Google Maps</string>
+    <string name="maps_directions">Directions in Google Maps</string>
+    <string name="maps_point_hint">Choose any waypoint for directions to that point. On a paused walk, select Directions in Google Maps from the point menu. Only the chosen coordinates are sent to Maps; no owner or contact details.</string>
+    <string name="maps_confirmation">Open directions to Point %1$d?\n\n%2$s, %3$s\n\nThis sends only the selected point to Google Maps. Google Maps or your browser may need an internet connection and uses its own privacy settings. Choose a safe, accessible entry point; this is not a verified boundary.</string>
+    <string name="open_maps">Open Google Maps</string>
+    <string name="maps_unavailable">Google Maps could not be opened and no browser is available. Install or enable Google Maps or a browser, then try again.</string>
     <string name="accuracy_threshold">Automatic accuracy limit (3–20 m)</string>
     <string name="movement_threshold">Minimum movement (1–20 m)</string>
     <string name="haptic">Haptic confirmations</string>
@@ -241,7 +254,7 @@
     <string name="save_settings">Save settings</string>
     <string name="reset_settings">Restore capture defaults</string>
     <string name="settings_hint">Applies to new sessions only. Automatic capture: movement OR 5 seconds; duplicate radius 1 m; fresh fix 10 seconds; walking speed 3.5 m/s; jump filter 50 m / 5 seconds; 10,000-point limit.</string>
-    <string name="privacy_body">No accounts, advertising, analytics or network permission. Structured records and undo history are in app-private SQLite storage. System backup and device transfer are disabled to avoid unintended copies. Encryption beyond the device’s storage protection is not included.\n\nRecently Deleted retains records for 30 days; cleanup runs when the app next opens. Permanent deletion removes app access, but cannot guarantee forensic flash erasure. Uninstall removes local data. Exported copies are not removed when you delete a record.\n\nVersion 1.0.0 · Database schema 1\nMVP: GPS capture and offline canvas. Map drawing, media, rich exports, encrypted backup and external GNSS are later-release features.</string>
+    <string name="privacy_body">No accounts, advertising, analytics or network permission. Structured records and undo history are in app-private SQLite storage. System backup and device transfer are disabled to avoid unintended copies. Encryption beyond the device’s storage protection is not included.\n\nChoosing Google Maps directions sends the selected waypoint to Google Maps or a browser. Owner and contact details are not included. Measuring remains fully offline.\n\nRecently Deleted retains records for 30 days; cleanup runs when the app next opens. Permanent deletion removes app access, but cannot guarantee forensic flash erasure. Uninstall removes local data. Exported copies are not removed when you delete a record.\n\nVersion %1$s · Database schema 1\nGPS capture and offline canvas. Map drawing, media, rich exports, encrypted backup and external GNSS are later-release features.</string>
     <string name="error_title">Action could not be completed</string>
     <string name="error_generic">No success was recorded. Your saved data is retained. Retry; if this persists, check storage and permissions. Do not clear app data.</string>
     <string name="database_failure">The local database could not be opened safely. No reset was attempted. Restart after freeing storage; do not uninstall or clear app data if you need to recover records.</string>

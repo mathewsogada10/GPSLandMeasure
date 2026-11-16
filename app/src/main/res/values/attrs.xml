@@ -1,0 +1,15 @@
+<resources>
+    <attr name="lmBackground" format="color" />
+    <attr name="lmSurface" format="color" />
+    <attr name="lmPrimary" format="color" />
+    <attr name="lmOnPrimary" format="color" />
+    <attr name="lmText" format="color" />
+    <attr name="lmMuted" format="color" />
+    <attr name="lmOutline" format="color" />
+    <attr name="lmWarningBackground" format="color" />
+    <attr name="lmWarningText" format="color" />
+    <attr name="lmCanvasBackground" format="color" />
+    <attr name="lmCanvasGrid" format="color" />
+    <attr name="lmCanvasLine" format="color" />
+    <attr name="lmCanvasFill" format="color" />
+</resources>

@@ -2,7 +2,6 @@ package com.mogada.landmeasure;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -19,11 +18,13 @@ final class BoundaryView extends View {
     private final double[] x, y;
     private final Path path = new Path();
     private final DashPathEffect dashed;
+    private final AppTheme.Palette colors;
 
     public BoundaryView(Context context) { this(context, List.of()); }
 
     BoundaryView(Context context, List<Models.Point> points) {
         super(context);
+        colors = new AppTheme.Palette(context);
         this.points = new ArrayList<>(points);
         label = context.getString(R.string.canvas_description, points.size());
         setContentDescription(label);
@@ -36,13 +37,13 @@ final class BoundaryView extends View {
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        canvas.drawColor(Color.rgb(229, 237, 224));
+        canvas.drawColor(colors.canvasBackground);
         paint.setStrokeWidth(density);
-        paint.setColor(Color.rgb(211, 222, 205));
+        paint.setColor(colors.canvasGrid);
         for (float x = 0; x < getWidth(); x += 32 * density) canvas.drawLine(x, 0, x, getHeight(), paint);
         for (float y = 0; y < getHeight(); y += 32 * density) canvas.drawLine(0, y, getWidth(), y, paint);
         if (points.isEmpty()) {
-            paint.setColor(Color.rgb(52, 75, 58)); paint.setTextSize(14 * density);
+            paint.setColor(colors.text); paint.setTextSize(14 * density);
             canvas.drawText(getContext().getString(R.string.canvas_empty), 20 * density, getHeight() / 2f, paint);
             return;
         }
@@ -66,9 +67,9 @@ final class BoundaryView extends View {
             if (i == 0) path.moveTo((float) x[i], (float) y[i]);
             else path.lineTo((float) x[i], (float) y[i]);
         }
-        paint.setStyle(Paint.Style.FILL); paint.setColor(0x3024634D);
+        paint.setStyle(Paint.Style.FILL); paint.setColor(colors.canvasFill);
         canvas.drawPath(path, paint);
-        paint.setStyle(Paint.Style.STROKE); paint.setColor(0xFF24634D); paint.setStrokeWidth(3 * density);
+        paint.setStyle(Paint.Style.STROKE); paint.setColor(colors.canvasLine); paint.setStrokeWidth(3 * density);
         canvas.drawPath(path, paint);
         if (points.size() > 2) {
             paint.setPathEffect(dashed);

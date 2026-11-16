@@ -168,6 +168,18 @@ public class StoreTest {
         assertEquals(15, store.load(next).config.accuracy(), 0);
     }
 
+    @Test public void themeAndLegacyRecordVersionSurviveReopeningDatabase() throws Exception {
+        assertEquals(AppTheme.SYSTEM, store.setting("theme", AppTheme.SYSTEM));
+        String old = draft();
+        store.getWritableDatabase().execSQL("UPDATE activity SET app_version='1.0.0' WHERE id=?", new Object[]{old});
+        store.putSetting("theme", AppTheme.DARK);
+        store.close();
+        store = new Store(RuntimeEnvironment.getApplication()); store.initialize();
+        assertEquals(AppTheme.DARK, store.setting("theme", AppTheme.SYSTEM));
+        assertEquals("1.0.0", store.load(old).appVersion);
+        assertEquals(BuildConfig.VERSION_NAME, store.load(store.create()).appVersion);
+    }
+
     @Test public void resumeAfterMonotonicClockResetAcceptsNewFixWithoutLosingOrder() throws Exception {
         String id = draft(); store.start(id);
         long oldNanos = android.os.SystemClock.elapsedRealtimeNanos() + 1000000000000L;

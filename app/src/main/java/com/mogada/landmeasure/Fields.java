@@ -1,6 +1,9 @@
 package com.mogada.landmeasure;
 
 final class Fields {
+    static final String[] FORM_KEYS = {"owner", "phone", "email", "consent", "usage", "location"};
+    static final int[] FORM_LABELS = {R.string.owner, R.string.phone, R.string.email, R.string.consent,
+            R.string.usage, R.string.location};
     static final String[] KEYS = {
         "land", "owner", "phone", "email", "identifier_label", "identifier", "consent",
         "usage", "usage_text", "location", "county", "subcounty", "ward", "village",

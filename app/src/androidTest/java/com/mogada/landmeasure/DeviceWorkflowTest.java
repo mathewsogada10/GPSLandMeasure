@@ -7,6 +7,8 @@ import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.graphics.Color;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
@@ -18,9 +20,12 @@ import android.view.ViewGroup;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Spinner;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
+import androidx.test.runner.lifecycle.Stage;
 
 import org.json.JSONObject;
 import org.junit.After;
@@ -44,6 +49,8 @@ public class DeviceWorkflowTest {
         app.io.submit(() -> {
             app.store.getWritableDatabase().delete("activity", null, null);
             app.store.putSetting("onboarding", "true");
+            app.store.getWritableDatabase().delete("setting", "key=?", new String[]{"theme"});
+            app.theme = AppTheme.SYSTEM;
         }).get(10, TimeUnit.SECONDS);
     }
 
@@ -138,6 +145,20 @@ public class DeviceWorkflowTest {
         assertTrue(load(id).area > 12000);
         assertEquals(4, load(id).points.size());
         assertEquals(PackageManager.PERMISSION_DENIED, app.checkSelfPermission(Manifest.permission.INTERNET));
+        click(R.string.navigate_to_land);
+        await(() -> has(R.string.maps_point_hint), "Selectable saved waypoints");
+        instrumentation.runOnMainSync(() -> {
+            View point = pointButton(activity.getWindow().getDecorView(), "Point 3");
+            assertNotNull(point); assertTrue(point.performClick());
+        });
+        await(() -> dialogHas(app.getString(R.string.open_maps)), "Maps confirmation");
+        assertTrue(dialogHas("Open directions to Point 3?"));
+        android.view.accessibility.AccessibilityNodeInfo dialog = instrumentation.getUiAutomation().getRootInActiveWindow();
+        assertNotNull(dialog);
+        assertTrue(dialog.findAccessibilityNodeInfosByText(app.getString(R.string.cancel)).get(0)
+                .performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
+        instrumentation.waitForIdleSync();
+        click(R.string.back);
         click(R.string.share);
         assertNotNull(app.getString(R.string.share_privacy));
     }
@@ -183,17 +204,137 @@ public class DeviceWorkflowTest {
 
     @Test public void draftEditorAutosavesUnicodeAndReopensSameRecord() throws Exception {
         String id = create("MANUAL");
+        app.io.submit(() -> {
+            Models.Record r = app.store.load(id);
+            r.metadata.put("county", "Kiambu").put("reference", "00123").put("reference_source", "document")
+                    .put("anchor_lat", -1.2).put("anchor_lon", 36.8);
+            app.store.saveMetadata(id, r.title, r.metadata, r.unit, r.mode); return null;
+        }).get(10, TimeUnit.SECONDS);
         open(id); click(R.string.edit_metadata);
         await(() -> has(R.string.title_label), "Editor loaded");
         instrumentation.runOnMainSync(() -> {
             EditText title = findInput(activity.getWindow().getDecorView(), app.getString(R.string.title_label));
             assertNotNull(title); title.setText("Mũthoni's shamba");
+            View root = activity.getWindow().getDecorView();
+            assertEquals(6, count(root, EditText.class));
+            assertEquals(1, count(root, Spinner.class));
+            for (int label : new int[]{R.string.owner, R.string.phone, R.string.email, R.string.consent, R.string.location})
+                assertNotNull(findInput(root, app.getString(label)));
+            assertNull(findInput(root, app.getString(R.string.county)));
+            assertNull(findInput(root, app.getString(R.string.reference)));
         });
         await(() -> "Mũthoni's shamba".equals(load(id).title), "Draft autosaved");
         click(R.string.save_draft);
         await(() -> has(R.string.edit_metadata), "Same draft reopened");
         assertEquals(Models.Status.DRAFT, load(id).status);
+        Models.Record saved = load(id);
+        assertEquals("Kiambu", saved.metadata.getString("county"));
+        assertEquals("00123", saved.metadata.getString("reference"));
+        assertEquals("document", saved.metadata.getString("reference_source"));
+        assertEquals(-1.2, saved.metadata.getDouble("anchor_lat"), 0);
+        assertEquals(Models.AreaUnit.ACRE, saved.unit);
+        assertEquals("MANUAL", saved.mode);
         assertEquals(1, app.io.submit(() -> app.store.list("", "all", "updated").size()).get().intValue());
+    }
+
+    private int count(View view, Class<? extends View> type) {
+        int total = type.isInstance(view) ? 1 : 0;
+        if (view instanceof ViewGroup group)
+            for (int i = 0; i < group.getChildCount(); i++) total += count(group.getChildAt(i), type);
+        return total;
+    }
+
+    private View pointButton(View view, String prefix) {
+        if (view instanceof android.widget.Button button && button.getText().toString().startsWith(prefix)) return view;
+        if (view instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View found = pointButton(group.getChildAt(i), prefix);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private boolean dialogHas(String text) {
+        android.view.accessibility.AccessibilityNodeInfo root = instrumentation.getUiAutomation().getRootInActiveWindow();
+        return root != null && !root.findAccessibilityNodeInfosByText(text).isEmpty();
+    }
+
+    private Spinner themeSpinner(View view) {
+        if (view instanceof Spinner spinner && app.getString(R.string.display_theme).contentEquals(spinner.getContentDescription()))
+            return spinner;
+        if (view instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) {
+                Spinner found = themeSpinner(group.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private void awaitRecreated(MainActivity previous) throws Exception {
+        await(() -> {
+            MainActivity[] current = {null};
+            instrumentation.runOnMainSync(() -> {
+                for (android.app.Activity candidate : ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED))
+                    if (candidate instanceof MainActivity main && main != previous) current[0] = main;
+            });
+            if (current[0] == null) return false;
+            activity = current[0]; return true;
+        }, "Activity recreated for display mode");
+        await(() -> has(R.string.save_settings), "Settings restored after recreation");
+    }
+
+    private boolean darkDisplay() {
+        int[] background = {0};
+        instrumentation.runOnMainSync(() -> background[0] = new AppTheme.Palette(activity).background);
+        return Color.luminance(background[0]) < 0.2f;
+    }
+
+    private void selectTheme(int index) throws Exception {
+        instrumentation.runOnMainSync(() -> {
+            Spinner spinner = themeSpinner(activity.getWindow().getDecorView());
+            assertNotNull(spinner); spinner.setSelection(index);
+        });
+        MainActivity previous = activity;
+        click(R.string.save_settings); awaitRecreated(previous);
+    }
+
+    @Test public void phoneThemeIsDefaultAndManualOverridesPersist() throws Exception {
+        boolean systemSwitch = Build.VERSION.SDK_INT >= 29;
+        if (systemSwitch) {
+            shell("cmd uimode night yes");
+            await(() -> (app.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                    == Configuration.UI_MODE_NIGHT_YES, "Phone dark mode");
+        }
+        try {
+            open(create("MANUAL"));
+            await(() -> has(R.string.edit_metadata), "Initial record");
+            assertEquals((app.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                    == Configuration.UI_MODE_NIGHT_YES, darkDisplay());
+            click(R.string.back); click(R.string.settings);
+            await(() -> has(R.string.save_settings), "Settings loaded");
+            instrumentation.runOnMainSync(() ->
+                    assertEquals(0, themeSpinner(activity.getWindow().getDecorView()).getSelectedItemPosition()));
+            selectTheme(1); assertFalse(darkDisplay());
+            assertEquals(AppTheme.LIGHT, app.io.submit(() -> app.store.setting("theme", AppTheme.SYSTEM)).get());
+            selectTheme(2); assertTrue(darkDisplay());
+            instrumentation.runOnMainSync(() -> activity.recreate());
+            MainActivity previous = activity;
+            awaitRecreated(previous); assertTrue(darkDisplay());
+            assertEquals(AppTheme.DARK, app.io.submit(() -> app.store.setting("theme", AppTheme.SYSTEM)).get());
+            selectTheme(0);
+            if (systemSwitch) {
+                previous = activity; shell("cmd uimode night no"); awaitRecreated(previous); assertFalse(darkDisplay());
+                previous = activity; shell("cmd uimode night yes"); awaitRecreated(previous); assertTrue(darkDisplay());
+            }
+        } finally {
+            if (systemSwitch) {
+                instrumentation.runOnMainSync(() -> { if (activity != null) activity.finish(); });
+                instrumentation.waitForIdleSync(); activity = null;
+                shell("cmd uimode night no");
+            }
+        }
     }
 
     private EditText findInput(View view, String description) {
