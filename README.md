@@ -60,15 +60,6 @@ Keep a future production keystore outside this repository.
   Owner contacts, identifiers and consent notes are not included.
 - Configurable capture defaults, independent distance units, haptic/audio
   feedback controls, and resource-based English UI strings.
-- **Haptic confirmations** provide a short phone vibration (on by default).
-  **Audio confirmations** play a short confirmation beep (off by default).
-  Both signal when measurement starts or resumes, a GPS point is accepted,
-  measurement pauses, or a completed measurement is saved, so you do not have
-  to watch the screen continuously. Enable either, both or neither in
-  **Settings & privacy**, then tap **Save settings**.
-- **Display mode** defaults to **Use phone setting**, following the phone's
-  light/dark configuration automatically. Optional Light and Dark overrides
-  persist across restarts. Apply a choice with **Save settings**.
 - GPSLandMeasure branding with an original parcel-and-location-pin launcher
   icon, including adaptive and monochrome variants.
 - Revisit a saved record and choose **Navigate to land**, then any waypoint,
@@ -85,6 +76,36 @@ Metadata snapshots are kept with the activity; waypoints, geometry versions,
 results, events, undo operations and settings have separate constrained tables.
 There is no network permission, cloud account, analytics, map SDK or external
 storage dependency. Android backup/device transfer are disabled.
+
+## Settings & privacy
+
+Open the top-right three-dot menu and select **Settings & privacy**.
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| Display mode | **Use phone setting** follows the phone's light/dark mode automatically. **Light** or **Dark** keeps the chosen appearance instead. | Use phone setting |
+| Default area unit | Starting area unit for new activities: square metres, hectares, acres or square kilometres. Existing activities keep their own unit. | Acres |
+| Default capture mode | **Automatic walk** records GPS points automatically when capture checks pass. **Manual GPS corners** records a corner when you tap to mark it. | Automatic walk |
+| Automatic accuracy limit (3-20 m) | Tolerance for GPS-reported uncertainty. At **10 m**, a reported accuracy of 6 m passes this check; 15 m does not. Lower values are stricter. This is not a guaranteed maximum position or boundary error. | 10 m |
+| Minimum movement (1-20 m) | Automatic capture's distance trigger from the last accepted point. A point can qualify after moving this far **or** after 5 seconds, but accuracy and other checks still apply, including rejecting points less than 1 m apart. | 3 m |
+| Distance display | Shows perimeter and other displayed distances in metres or kilometres, independently of area units. Capture thresholds remain in metres. | Metres |
+| Haptic confirmations | Short phone vibrations confirming measurement actions. | On |
+| Audio confirmations | Short confirmation beeps for the same actions. | Off |
+
+Haptic/audio confirmations signal when measurement starts or resumes, a GPS
+point is accepted, measurement pauses, or a completed measurement is saved, so
+you do not have to watch the screen continuously. Enable either, both or neither.
+Tap **Save settings** to apply and retain edited preferences across restarts.
+
+Default area unit and capture mode apply to new activities; a record's
+**Measurement options** can override them. Accuracy and movement thresholds are
+fixed when a measurement first starts and remain unchanged when it resumes.
+Other capture checks can still reject a point that passes these two thresholds.
+
+**Restore capture defaults** immediately resets capture mode to Automatic walk,
+accuracy to 10 m and minimum movement to 3 m; it leaves other preferences
+unchanged. **Recently Deleted** opens deleted records for restoration or
+permanent deletion before their 30-day expiry.
 
 ## Build on this machine
 
