@@ -60,6 +60,12 @@ Keep a future production keystore outside this repository.
   Owner contacts, identifiers and consent notes are not included.
 - Configurable capture defaults, independent distance units, haptic/audio
   feedback controls, and resource-based English UI strings.
+- **Haptic confirmations** provide a short phone vibration (on by default).
+  **Audio confirmations** play a short confirmation beep (off by default).
+  Both signal when measurement starts or resumes, a GPS point is accepted,
+  measurement pauses, or a completed measurement is saved, so you do not have
+  to watch the screen continuously. Enable either, both or neither in
+  **Settings & privacy**, then tap **Save settings**.
 - **Display mode** defaults to **Use phone setting**, following the phone's
   light/dark configuration automatically. Optional Light and Dark overrides
   persist across restarts. Apply a choice with **Save settings**.
