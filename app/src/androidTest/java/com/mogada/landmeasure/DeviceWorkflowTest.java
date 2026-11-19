@@ -19,6 +19,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Spinner;
 import android.widget.Button;
@@ -108,7 +109,12 @@ public class DeviceWorkflowTest {
     }
 
     private boolean has(int resource) {
-        return hasText(app.getString(resource));
+        boolean[] found = {false};
+        instrumentation.runOnMainSync(() -> {
+            View root = activity.getWindow().getDecorView();
+            found[0] = find(root, app.getString(resource)) != null || described(root, resource) != null;
+        });
+        return found[0];
     }
 
     private boolean hasText(String text) {
@@ -122,6 +128,7 @@ public class DeviceWorkflowTest {
         await(() -> has(resource), "Button " + app.getString(resource));
         instrumentation.runOnMainSync(() -> {
             View view = find(activity.getWindow().getDecorView(), app.getString(resource));
+            if (view == null) view = described(activity.getWindow().getDecorView(), resource);
             assertNotNull(view); assertTrue(view.isEnabled()); view.performClick();
         });
         instrumentation.waitForIdleSync();
@@ -162,7 +169,7 @@ public class DeviceWorkflowTest {
         click(R.string.filters);
         setAreaFilter(R.string.area_equal, "1.2309", R.string.unit_ha);
         popupClick(R.string.confirm);
-        await(() -> has(R.string.records_next), "Compact completed result");
+        awaitPage(1, 1, 1, 1, 1);
         instrumentation.runOnMainSync(() -> {
             View card = pointButton(activity.getWindow().getDecorView(), "Device test parcel");
             assertNotNull(card);
@@ -479,14 +486,20 @@ public class DeviceWorkflowTest {
                 assertTrue(card.contains(app.getString(R.string.record_gps_unassessed)));
                 assertFalse(card.contains("Hidden ")); assertFalse(card.contains("agricultural"));
             }
-            assertFalse(find(activity.getWindow().getDecorView(), app.getString(R.string.records_previous)).isEnabled());
+            assertNull(find(activity.getWindow().getDecorView(), app.getString(R.string.records_previous)));
+            assertTrue(find(activity.getWindow().getDecorView(), app.getString(R.string.records_next)).isEnabled());
         });
         click(R.string.records_next); awaitPage(11, 20, 23, 2, 3);
-        instrumentation.runOnMainSync(() -> assertEquals(10, listCards(activity.getWindow().getDecorView()).size()));
+        instrumentation.runOnMainSync(() -> {
+            View root = activity.getWindow().getDecorView();
+            assertEquals(10, listCards(root).size());
+            assertTrue(find(root, app.getString(R.string.records_previous)).isEnabled());
+            assertTrue(find(root, app.getString(R.string.records_next)).isEnabled());
+        });
         click(R.string.records_next); awaitPage(21, 23, 23, 3, 3);
         instrumentation.runOnMainSync(() -> {
             assertEquals(3, listCards(activity.getWindow().getDecorView()).size());
-            assertFalse(find(activity.getWindow().getDecorView(), app.getString(R.string.records_next)).isEnabled());
+            assertNull(find(activity.getWindow().getDecorView(), app.getString(R.string.records_next)));
         });
         click(R.string.records_previous); awaitPage(11, 20, 23, 2, 3);
         MainActivity previous = activity;
@@ -510,6 +523,53 @@ public class DeviceWorkflowTest {
         });
         openSettings();
         click(R.string.back); awaitPage(11, 20, 23, 2, 3);
+    }
+
+    @Test public void singlePageAndEmptyResultsHidePaginationAndBackArrowSavesEdits() throws Exception {
+        listFixtures();
+        instrumentation.runOnMainSync(() ->
+                findInput(activity.getWindow().getDecorView(), app.getString(R.string.search)).setText("List fixture 01"));
+        awaitPage(1, 10, 10, 1, 1);
+        instrumentation.runOnMainSync(() -> {
+            View root = activity.getWindow().getDecorView();
+            assertNull(find(root, app.getString(R.string.records_previous)));
+            assertNull(find(root, app.getString(R.string.records_next)));
+        });
+        instrumentation.runOnMainSync(() ->
+                findInput(activity.getWindow().getDecorView(), app.getString(R.string.search)).setText("List fixture 001"));
+        awaitPage(1, 1, 1, 1, 1);
+        instrumentation.runOnMainSync(() -> {
+            View root = activity.getWindow().getDecorView();
+            assertNull(find(root, app.getString(R.string.records_previous)));
+            assertNull(find(root, app.getString(R.string.records_next)));
+            assertNull(described(root, R.string.back));
+            assertTrue(find(root, listCards(root).get(0)).performClick());
+        });
+        await(() -> has(R.string.edit_metadata), "Activity details");
+        instrumentation.runOnMainSync(() -> {
+            View root = activity.getWindow().getDecorView();
+            View back = described(root, R.string.back);
+            assertTrue(back instanceof ImageButton);
+            assertNotNull(((ImageButton) back).getDrawable());
+            assertNull(find(root, app.getString(R.string.back)));
+        });
+        click(R.string.edit_metadata);
+        await(() -> has(R.string.draft_hint), "Activity editor");
+        instrumentation.runOnMainSync(() ->
+                findInput(activity.getWindow().getDecorView(), app.getString(R.string.title_label))
+                        .setText("List fixture 001 updated"));
+        click(R.string.back);
+        await(() -> has(R.string.edit_metadata) && hasText("List fixture 001 updated"),
+                "Back arrow saved editor changes");
+        click(R.string.back); awaitPage(1, 1, 1, 1, 1);
+        instrumentation.runOnMainSync(() ->
+                findInput(activity.getWindow().getDecorView(), app.getString(R.string.search)).setText("No matching fixture"));
+        await(() -> has(R.string.no_matches), "Empty filtered page");
+        instrumentation.runOnMainSync(() -> {
+            View root = activity.getWindow().getDecorView();
+            assertNull(find(root, app.getString(R.string.records_previous)));
+            assertNull(find(root, app.getString(R.string.records_next)));
+        });
     }
 
     @Test public void clearFiltersResetsSortSearchViewAdvancedCriteriaAndPage() throws Exception {

@@ -232,8 +232,15 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(12), dp(8), dp(16), dp(8));
         if (back) {
-            Button backButton = button(R.string.back, this::navigateBack);
-            header.addView(backButton);
+            ImageButton backButton = new ImageButton(this);
+            backButton.setImageResource(R.drawable.ic_arrow_back);
+            backButton.setImageTintList(ColorStateList.valueOf(colors.primary));
+            backButton.setBackgroundResource(android.R.drawable.list_selector_background);
+            backButton.setPadding(dp(12), dp(12), dp(12), dp(12));
+            backButton.setContentDescription(getString(R.string.back));
+            if (Build.VERSION.SDK_INT >= 26) backButton.setTooltipText(getString(R.string.back));
+            backButton.setOnClickListener(v -> navigateBack());
+            header.addView(backButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
         }
         TextView brand = text(getString(R.string.app_name), 24, colors.primary);
         brand.setTypeface(null, Typeface.BOLD);
@@ -337,11 +344,13 @@ public final class MainActivity extends ComponentActivity implements LocationLis
                     card.setBackground(cardBackground()); results.addView(card, spaced());
                 }
                 LinearLayout navigation = row();
-                Button previous = button(R.string.records_previous, () -> { recordPage = result.index() - 1; home(); });
-                Button next = button(R.string.records_next, () -> { recordPage = result.index() + 1; home(); });
-                previous.setEnabled(result.index() > 0);
-                next.setEnabled(result.index() + 1 < result.pageCount());
-                navigation.addView(previous, weighted()); navigation.addView(next, weighted()); results.addView(navigation);
+                if (result.index() > 0)
+                    navigation.addView(button(R.string.records_previous,
+                            () -> { recordPage = result.index() - 1; home(); }), weighted());
+                if (result.index() + 1 < result.pageCount())
+                    navigation.addView(button(R.string.records_next,
+                            () -> { recordPage = result.index() + 1; home(); }), weighted());
+                if (navigation.getChildCount() > 0) results.addView(navigation);
             }, this::error);
         };
         Runnable refilter = () -> {
