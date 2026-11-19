@@ -1,5 +1,13 @@
 package com.mogada.landmeasure;
 
+import com.mogada.landmeasure.capture.CaptureService;
+import com.mogada.landmeasure.data.Store;
+import com.mogada.landmeasure.domain.CaptureRules;
+import com.mogada.landmeasure.domain.Models;
+import com.mogada.landmeasure.ui.AppTheme;
+import com.mogada.landmeasure.ui.BoundaryView;
+import com.mogada.landmeasure.ui.MainActivity;
+
 import static org.junit.Assert.*;
 
 import android.Manifest;
@@ -17,6 +25,7 @@ import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.MotionEvent;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -200,6 +209,68 @@ public class DeviceWorkflowTest {
         if (view instanceof CheckBox box) box.setChecked(true);
         if (view instanceof ViewGroup group)
             for (int i = 0; i < group.getChildCount(); i++) checkAll(group.getChildAt(i));
+    }
+
+    @Test public void tappingBoundaryEdgesShowsMetresRegardlessOfDistancePreference() throws Exception {
+        String id = create("MANUAL");
+        app.io.submit(() -> {
+            app.store.start(id);
+            long nanos = SystemClock.elapsedRealtimeNanos();
+            double[][] corners = {{0, 0}, {0, 0.001}, {0.001, 0.001}, {0.001, 0}};
+            for (int i = 0; i < corners.length; i++) {
+                long at = nanos + i * 60000000000L;
+                Models.Point point = new Models.Point(corners[i][0], corners[i][1], 5,
+                        System.currentTimeMillis() + i * 60000L, at, "GPS", false, false);
+                assertEquals(CaptureRules.Decision.ACCEPT, app.store.accept(id, point, at, true, false));
+            }
+            app.store.pause(id, "PAUSED");
+            app.store.complete(id);
+            app.store.putSetting("distance", "km");
+            return null;
+        }).get(10, TimeUnit.SECONDS);
+        try {
+            open(id);
+            await(() -> has(R.string.edge_hint), "Boundary edge hint");
+            instrumentation.waitForIdleSync();
+            instrumentation.runOnMainSync(() -> {
+                BoundaryView boundary = boundaryView(activity.getWindow().getDecorView());
+                assertNotNull(boundary);
+                float density = app.getResources().getDisplayMetrics().density;
+                float span = Math.min(boundary.getWidth(), boundary.getHeight()) - 64 * density;
+                tapBoundary(boundary, boundary.getWidth() / 2f, (boundary.getHeight() + span) / 2f);
+            });
+            await(() -> hasText(app.getString(R.string.edge_distance, 1, 2,
+                    java.text.NumberFormat.getNumberInstance().format(111.32))), "Edge length in metres");
+            instrumentation.runOnMainSync(() -> {
+                BoundaryView boundary = boundaryView(activity.getWindow().getDecorView());
+                float density = app.getResources().getDisplayMetrics().density;
+                float span = Math.min(boundary.getWidth(), boundary.getHeight()) - 64 * density;
+                tapBoundary(boundary, (boundary.getWidth() - span) / 2f, boundary.getHeight() / 2f);
+            });
+            await(() -> hasText(app.getString(R.string.edge_distance, 4, 1,
+                    java.text.NumberFormat.getNumberInstance().format(110.57))), "Closing edge length");
+        } finally {
+            app.io.submit(() -> { app.store.putSetting("distance", "m"); return null; }).get(10, TimeUnit.SECONDS);
+        }
+    }
+
+    private BoundaryView boundaryView(View root) {
+        if (root instanceof BoundaryView boundary) return boundary;
+        if (root instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) {
+                BoundaryView found = boundaryView(group.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private void tapBoundary(BoundaryView view, float x, float y) {
+        long now = SystemClock.uptimeMillis();
+        MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
+        MotionEvent up = MotionEvent.obtain(now, now + 50, MotionEvent.ACTION_UP, x, y, 0);
+        assertTrue(view.dispatchTouchEvent(down)); assertTrue(view.dispatchTouchEvent(up));
+        down.recycle(); up.recycle();
     }
 
     @Test public void foregroundCaptureAcceptsGpsAndStopsOnPause() throws Exception {

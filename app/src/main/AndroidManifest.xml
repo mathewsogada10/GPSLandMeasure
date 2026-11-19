@@ -18,15 +18,19 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LandMeasure.Starting">
         <activity
+            android:name=".ui.MainActivity"
+            android:exported="false" />
+        <activity-alias
             android:name=".MainActivity"
+            android:targetActivity=".ui.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
         <service
-            android:name=".CaptureService"
+            android:name=".capture.CaptureService"
             android:exported="false"
             android:foregroundServiceType="location" />
     </application>

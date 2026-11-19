@@ -1,4 +1,10 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.capture;
+
+import com.mogada.landmeasure.LandApp;
+import com.mogada.landmeasure.R;
+import com.mogada.landmeasure.domain.CaptureRules;
+import com.mogada.landmeasure.domain.Models;
+import com.mogada.landmeasure.ui.MainActivity;
 
 import android.Manifest;
 import android.app.Notification;
@@ -17,10 +23,10 @@ import android.os.IBinder;
 import android.os.SystemClock;
 
 public final class CaptureService extends Service implements LocationListener {
-    static final String START = "com.mogada.landmeasure.START";
-    static final String PAUSE = "com.mogada.landmeasure.PAUSE";
-    static final String MARK = "com.mogada.landmeasure.MARK";
-    static volatile Location latestFix;
+    public static final String START = "com.mogada.landmeasure.START";
+    public static final String PAUSE = "com.mogada.landmeasure.PAUSE";
+    public static final String MARK = "com.mogada.landmeasure.MARK";
+    public static volatile Location latestFix;
     private static final String CHANNEL = "active_measurement";
     private static final int NOTICE = 1;
     private LandApp app;
@@ -139,7 +145,7 @@ public final class CaptureService extends Service implements LocationListener {
     }
 
     @SuppressWarnings("deprecation")
-    static Models.Point point(Location location, boolean override) {
+    public static Models.Point point(Location location, boolean override) {
         return new Models.Point(location.getLatitude(), location.getLongitude(),
                 location.hasAccuracy() ? location.getAccuracy() : Double.NaN, location.getTime(),
                 location.getElapsedRealtimeNanos(), "GPS", override, location.isFromMockProvider());

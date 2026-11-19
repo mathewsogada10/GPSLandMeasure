@@ -1,4 +1,10 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.data;
+
+import com.mogada.landmeasure.BuildConfig;
+import com.mogada.landmeasure.domain.CaptureRules;
+import com.mogada.landmeasure.domain.Geometry;
+import com.mogada.landmeasure.domain.Models;
+import com.mogada.landmeasure.ui.AppTheme;
 
 import static org.junit.Assert.*;
 

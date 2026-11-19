@@ -1,5 +1,9 @@
 package com.mogada.landmeasure;
 
+import com.mogada.landmeasure.data.Store;
+import com.mogada.landmeasure.domain.CaptureRules;
+import com.mogada.landmeasure.ui.AppTheme;
+
 import android.app.Application;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
@@ -15,17 +19,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class LandApp extends Application {
-    final ExecutorService io = Executors.newSingleThreadExecutor();
-    final Handler main = new Handler(Looper.getMainLooper());
-    final List<Runnable> listeners = new CopyOnWriteArrayList<>();
-    Store store;
-    volatile String activeId;
-    volatile int accepted;
-    volatile CaptureRules.Decision lastDecision;
-    volatile String failure;
-    volatile boolean initialized;
-    volatile String theme = AppTheme.SYSTEM;
-    List<String> recovered = List.of();
+    public final ExecutorService io = Executors.newSingleThreadExecutor();
+    public final Handler main = new Handler(Looper.getMainLooper());
+    public final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    public Store store;
+    public volatile String activeId;
+    public volatile int accepted;
+    public volatile CaptureRules.Decision lastDecision;
+    public volatile String failure;
+    public volatile boolean initialized;
+    public volatile String theme = AppTheme.SYSTEM;
+    public List<String> recovered = List.of();
 
     @Override public void onCreate() {
         super.onCreate();
@@ -40,11 +44,11 @@ public final class LandApp extends Application {
         });
     }
 
-    interface Work<T> { T run() throws Exception; }
-    interface Done<T> { void accept(T value); }
-    interface Failed { void accept(Exception error); }
+    public interface Work<T> { T run() throws Exception; }
+    public interface Done<T> { void accept(T value); }
+    public interface Failed { void accept(Exception error); }
 
-    <T> void run(Work<T> work, Done<T> done, Failed failed) {
+    public <T> void run(Work<T> work, Done<T> done, Failed failed) {
         io.execute(() -> {
             try {
                 T value = work.run();
@@ -53,9 +57,9 @@ public final class LandApp extends Application {
         });
     }
 
-    void publish() { main.post(() -> { for (Runnable listener : listeners) listener.run(); }); }
+    public void publish() { main.post(() -> { for (Runnable listener : listeners) listener.run(); }); }
 
-    void feedback() {
+    public void feedback() {
         run(() -> new boolean[]{"true".equals(store.setting("haptic", "true")),
                 "true".equals(store.setting("audio", "false"))}, flags -> {
             if (flags[0]) {

@@ -1,4 +1,6 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.util;
+
+import com.mogada.landmeasure.domain.Models;
 
 import static org.junit.Assert.*;
 

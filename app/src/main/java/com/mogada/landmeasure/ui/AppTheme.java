@@ -1,11 +1,13 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.ui;
+
+import com.mogada.landmeasure.R;
 
 import android.content.Context;
 import android.content.res.Configuration;
 import android.util.TypedValue;
 
-final class AppTheme {
-    static final String SYSTEM = "SYSTEM", LIGHT = "LIGHT", DARK = "DARK";
+public final class AppTheme {
+    public static final String SYSTEM = "SYSTEM", LIGHT = "LIGHT", DARK = "DARK";
     static final String[] MODES = {SYSTEM, LIGHT, DARK};
 
     static int style(String mode, Configuration configuration) {
@@ -21,11 +23,12 @@ final class AppTheme {
         };
     }
 
-    static final class Palette {
-        final int background, surface, primary, onPrimary, text, muted, outline;
+    public static final class Palette {
+        public final int background;
+        final int surface, primary, onPrimary, text, muted, outline;
         final int warningBackground, warningText, canvasBackground, canvasGrid, canvasLine, canvasFill;
 
-        Palette(Context context) {
+        public Palette(Context context) {
             background = color(context, R.attr.lmBackground);
             surface = color(context, R.attr.lmSurface);
             primary = color(context, R.attr.lmPrimary);

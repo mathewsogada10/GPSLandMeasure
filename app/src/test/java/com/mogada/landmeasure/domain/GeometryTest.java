@@ -1,4 +1,4 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.domain;
 
 import static org.junit.Assert.*;
 

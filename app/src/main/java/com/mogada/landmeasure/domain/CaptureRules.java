@@ -1,12 +1,12 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.domain;
 
-final class CaptureRules {
-    static final int LIMIT = 10000;
-    enum Decision { ACCEPT, STALE, ACCURACY, DUPLICATE, TIME, MOVEMENT, SPEED, JUMP, LIMIT, INVALID }
-    record Config(double accuracy, double movement, double duplicate, double speed,
+public final class CaptureRules {
+    public static final int LIMIT = 10000;
+    public enum Decision { ACCEPT, STALE, ACCURACY, DUPLICATE, TIME, MOVEMENT, SPEED, JUMP, LIMIT, INVALID }
+    public record Config(double accuracy, double movement, double duplicate, double speed,
                   long intervalMs, long maxAgeMs, double closure) {
-        static Config defaults() { return new Config(10, 3, 1, 3.5, 5000, 10000, 10); }
-        Config {
+        public static Config defaults() { return new Config(10, 3, 1, 3.5, 5000, 10000, 10); }
+        public Config {
             if (!Double.isFinite(accuracy) || !Double.isFinite(movement)
                     || !Double.isFinite(duplicate) || !Double.isFinite(speed) || !Double.isFinite(closure)
                     || accuracy < 3 || accuracy > 20 || movement < 1 || movement > 20
@@ -17,7 +17,7 @@ final class CaptureRules {
         }
     }
 
-    static Decision evaluate(Models.Point candidate, Models.Point previous, int count,
+    public static Decision evaluate(Models.Point candidate, Models.Point previous, int count,
                              long nowNanos, Config config, boolean manual, boolean override) {
         if (count >= LIMIT) return Decision.LIMIT;
         if (!Double.isFinite(candidate.lat) || !Double.isFinite(candidate.lon)

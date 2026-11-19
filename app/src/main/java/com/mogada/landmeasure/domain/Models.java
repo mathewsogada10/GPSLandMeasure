@@ -1,4 +1,4 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.domain;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -8,32 +8,30 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-final class Models {
+public final class Models {
     private Models() {}
 
-    enum Status { DRAFT, READY, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED, ARCHIVED }
+    public enum Status { DRAFT, READY, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED, ARCHIVED }
 
-    enum AreaUnit {
-        M2(1, R.string.unit_m2), HA(10000, R.string.unit_ha),
-        ACRE(4046.8564224, R.string.unit_acre), KM2(1000000, R.string.unit_km2);
-        final double divisor;
-        final int label;
-        AreaUnit(double divisor, int label) { this.divisor = divisor; this.label = label; }
+    public enum AreaUnit {
+        M2(1), HA(10000), ACRE(4046.8564224), KM2(1000000);
+        public final double divisor;
+        AreaUnit(double divisor) { this.divisor = divisor; }
     }
 
-    static final class Point {
-        final String id;
-        final double lat, lon, accuracy;
-        final long time, nanos;
-        final String source;
-        final boolean override, mock;
+    public static final class Point {
+        public final String id;
+        public final double lat, lon, accuracy;
+        public final long time, nanos;
+        public final String source;
+        public final boolean override, mock;
 
-        Point(double lat, double lon, double accuracy, long time, long nanos,
+        public Point(double lat, double lon, double accuracy, long time, long nanos,
               String source, boolean override, boolean mock) {
             this(UUID.randomUUID().toString(), lat, lon, accuracy, time, nanos, source, override, mock);
         }
 
-        Point(String id, double lat, double lon, double accuracy, long time, long nanos,
+        public Point(String id, double lat, double lon, double accuracy, long time, long nanos,
               String source, boolean override, boolean mock) {
             this.id = id;
             this.lat = lat;
@@ -53,13 +51,13 @@ final class Models {
         }
     }
 
-    static String encode(List<Point> points) throws JSONException {
+    public static String encode(List<Point> points) throws JSONException {
         JSONArray out = new JSONArray();
         for (Point point : points) out.put(point.json());
         return out.toString();
     }
 
-    static List<Point> decode(String value) throws JSONException {
+    public static List<Point> decode(String value) throws JSONException {
         JSONArray array = new JSONArray(value);
         List<Point> out = new ArrayList<>();
         for (int i = 0; i < array.length(); i++) {
@@ -71,20 +69,20 @@ final class Models {
         return out;
     }
 
-    static final class Record {
-        String id, title, mode, reason, appVersion;
-        Status status;
-        AreaUnit unit;
-        JSONObject metadata = new JSONObject();
-        List<Point> points = new ArrayList<>();
-        int version, rejected, overrides, mockCount;
-        long created, updated, completed, deletedAt, purgeAfter, duration;
-        double area, perimeter, best, median, worst, closure;
-        boolean hasResult;
-        CaptureRules.Config config;
+    public static final class Record {
+        public String id, title, mode, reason, appVersion;
+        public Status status;
+        public AreaUnit unit;
+        public JSONObject metadata = new JSONObject();
+        public List<Point> points = new ArrayList<>();
+        public int version, rejected, overrides, mockCount;
+        public long created, updated, completed, deletedAt, purgeAfter, duration;
+        public double area, perimeter, best, median, worst, closure;
+        public boolean hasResult;
+        public CaptureRules.Config config;
 
-        boolean editable() { return deletedAt == 0 && status != Status.ARCHIVED; }
-        boolean openGeometry() {
+        public boolean editable() { return deletedAt == 0 && status != Status.ARCHIVED; }
+        public boolean openGeometry() {
             return editable() && (status == Status.PAUSED || status == Status.IN_PROGRESS);
         }
     }

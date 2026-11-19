@@ -1,5 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">GPSLandMeasure</string>
+    <string name="edge_hint">Tap an edge to see its length in metres. Keyboard or screen-reader activation selects the next edge.</string>
+    <string name="edge_distance">Edge %1$d–%2$d: %3$s m</string>
     <string name="tagline">FIELD NOTES. GROUNDED ESTIMATES.</string>
     <string name="welcome">Measure with confidence.\nUnderstand the limits.</string>
     <string name="onboarding">Walk a boundary, review the points, and keep an estimated area on this phone. No account, internet connection, or map download is needed to measure.\n\nOwner and location data stay in private app storage unless you share them. Opening a waypoint in Google Maps sends only its coordinates. Uninstalling the app removes its records.</string>

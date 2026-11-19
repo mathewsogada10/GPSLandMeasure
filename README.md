@@ -5,12 +5,12 @@ Native, offline-first Android implementation of the **MVP** in
 
 **Android 7.0 (API 24) minimum; Android 17 (API 37) target.**
 Application ID: `com.mogada.landmeasure`.
-Version 1.2.0 (version code 3). The application ID and database schema are
+Version 1.3.0 (version code 4). The application ID and database schema are
 unchanged so this build updates the existing evaluation app without losing records.
 
 ## Install
 
-Use `artifacts\GPSLandMeasure-1.2.0-debug.apk` for device evaluation. It is signed with
+Use `artifacts\GPSLandMeasure-1.3.0-debug.apk` for device evaluation. It is signed with
 the development debug certificate, not a production distribution certificate.
 Transfer it to a phone and allow installation from the app used to open it.
 
@@ -34,6 +34,11 @@ Keep a future production keystore outside this repository.
   device reboot without silently restarting tracking.
 - Offline boundary canvas, numeric/GPS point edits, ordering, and 20 persisted
   undo/redo operations. Map tiles and API keys are not required.
+- Tap a boundary edge to highlight it and show the distance between its numbered
+  endpoints in metres, including the closing edge from the last point to the
+  first. Lengths use WGS84 geodesics, not screen pixels, and remain in metres
+  even when distance display is set to kilometres. Keyboard/screen-reader
+  activation cycles through edges; dragging still scrolls instead of selecting.
 - WGS84 ellipsoidal area/perimeter using GeographicLib's Karney algorithm.
   JTS validates the unwrapped coordinate ring, including self-intersections.
   Canonical square metres/metres remain separate from display units.
@@ -107,6 +112,24 @@ accuracy to 10 m and minimum movement to 3 m; it leaves other preferences
 unchanged. **Recently Deleted** opens deleted records for restoration or
 permanent deletion before their 30-day expiry.
 
+## Source organization
+
+Source packages live under `app\src\main\java\com\mogada\landmeasure`:
+
+| Package | Responsibility |
+|---------|----------------|
+| Root (`LandApp`) | Application startup, shared services and background/main-thread coordination. |
+| `ui` | Activity/screens, boundary rendering and edge selection, themes and form labels. |
+| `domain` | Measurement models, metadata constraints, capture rules and WGS84 geometry; no Android UI/resource dependencies. |
+| `data` | SQLite schema, transactions, records, queries, settings and recovery. |
+| `capture` | Android foreground GPS service and location delivery. |
+| `util` | Reusable Google Maps intent/opening helper. |
+
+Unit tests mirror these packages. Device workflows exercise their integration.
+Persistence uses domain models rather than UI classes; display labels remain in
+`ui`. The application ID and database schema remain unchanged. The original
+launcher component is retained as an activity alias targeting `ui.MainActivity`.
+
 ## Build on this machine
 
 ```powershell
@@ -136,9 +159,9 @@ production installation containing real user data: the test resets its database.
 
 ## Verification and release limits
 
-Validation on November 16, 2026:
+Validation on November 19, 2026 (version 1.3.0):
 
-- 38 JVM/Robolectric tests passed: geodesic reference fixtures, equator/high
+- 43 JVM/Robolectric tests passed: geodesic reference fixtures, equator/high
   latitude/antimeridian, invalid rings, a 10,000-vertex ring, capture filtering,
   recovery/reboot timing, transactional fault injection, foreign keys,
   immutable snapshots, revisions, retention, search and combined filters;
@@ -146,7 +169,10 @@ Validation on November 16, 2026:
   URL precision under comma-decimal locales and Maps/browser fallback failures;
   paging through 503 equally sorted records without gaps, clamping after
   deletion, empty filtered pages, and cross-unit rounded area comparisons.
-- Seven instrumentation tests passed on **Android 7.0/API 24**.
+  Edge tests cover endpoint distances, the closing edge, hit/miss detection,
+  scrolling/cancelled gestures, keyboard activation, sparse boundaries,
+  antimeridian projection and resizing.
+- Nine instrumentation tests passed on **Android 7.0/API 24**.
   They exercise draft UI autosave, review and
   completion UI, real device SQLite/recovery/filtering, foreground service GPS
   delivery, mock indication and stopping point acceptance after Pause. They also
@@ -154,18 +180,21 @@ Validation on November 16, 2026:
   selecting a non-first saved waypoint, and persistent light/dark overrides.
   List regressions exercise ten-item pages, recreation, overflow access after
   scrolling, compact dates/cards, cross-unit size filtering, and a complete
-  reset of advanced criteria, search, view, sorting and pagination.
-- On **Android 17/API 37**, three of seven instrumentation tests passed.
+  reset of advanced criteria, search, view, sorting and pagination. They also
+  verify hidden pagination controls at page boundaries, editor saving through
+  the back arrow, and edge lengths in metres with kilometre display selected.
+- On **Android 17/API 37**, five of nine instrumentation tests passed, including
+  edge selection, back-arrow navigation, draft editing, SQLite/recovery and GPS.
   Four UI tests timed out while emulator Quickstep/System UI "not responding"
-  dialogs obstructed popup and filter access, including after resetting the
-  disposable AVD. Full API 37 UI verification remains incomplete for 1.2.0;
+  dialogs obstructed popup and filter access. Full API 37 UI verification
+  remains incomplete for 1.3.0;
   these failures are retained in the local test evidence.
-- Earlier 1.1.0 validation on API 37 covered automatic phone-theme changes.
-  An in-place installation of 1.1.0 over version 1.0.0 preserved a fixture
-  record, legacy metadata, original app provenance and all four waypoints;
-  database integrity and schema version 1 were retained.
+- An in-place installation of 1.3.0 over 1.2.0 on API 24 preserved the exact
+  activity, geometry, four waypoint and result rows, including original app
+  provenance. Database integrity and schema version 1 were retained, and
+  launching through the original activity component alias succeeded.
 - Strict debug lint passed; optimized release compilation and resource/code
-  shrinking passed. JUnit XML results are retained in `verification`.
+  shrinking passed. JUnit XML results are retained in `verification\1.3.0`.
 
 This is an evaluation build, not a claim that every FRD release gate has been
 certified. Intermediate Android versions, physical GNSS performance, screen-off

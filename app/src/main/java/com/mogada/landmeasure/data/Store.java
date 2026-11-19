@@ -1,4 +1,10 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.data;
+
+import com.mogada.landmeasure.BuildConfig;
+import com.mogada.landmeasure.domain.CaptureRules;
+import com.mogada.landmeasure.domain.Geometry;
+import com.mogada.landmeasure.domain.MetadataFields;
+import com.mogada.landmeasure.domain.Models;
 
 import android.content.ContentValues;
 import android.content.Context;
@@ -14,11 +20,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
-final class Store extends SQLiteOpenHelper {
+public final class Store extends SQLiteOpenHelper {
     static final int SCHEMA = 1;
     private static final long RETENTION_MS = 30L * 24 * 60 * 60 * 1000;
 
-    Store(Context context) {
+    public Store(Context context) {
         super(context, "landmeasure.db", null, SCHEMA);
         setWriteAheadLoggingEnabled(true);
     }
@@ -96,13 +102,13 @@ final class Store extends SQLiteOpenHelper {
         } finally { db.endTransaction(); }
     }
 
-    String setting(String key, String fallback) {
+    public String setting(String key, String fallback) {
         try (Cursor c = getReadableDatabase().rawQuery("SELECT value FROM setting WHERE key=?", new String[]{key})) {
             return c.moveToFirst() ? c.getString(0) : fallback;
         }
     }
 
-    void putSetting(String key, String value) {
+    public void putSetting(String key, String value) {
         ContentValues values = new ContentValues();
         values.put("key", key); values.put("value", value);
         getWritableDatabase().insertWithOnConflict("setting", null, values, SQLiteDatabase.CONFLICT_REPLACE);
@@ -126,7 +132,7 @@ final class Store extends SQLiteOpenHelper {
                 j.getLong("maxAge"), j.getDouble("closure"));
     }
 
-    List<String> initialize() throws Exception {
+    public List<String> initialize() throws Exception {
         return transaction(() -> {
             SQLiteDatabase db = getWritableDatabase();
             try (Cursor c = db.rawQuery("PRAGMA quick_check", null)) {
@@ -144,7 +150,7 @@ final class Store extends SQLiteOpenHelper {
         });
     }
 
-    String create() throws Exception {
+    public String create() throws Exception {
         return transaction(() -> {
             String id = UUID.randomUUID().toString();
             long now = System.currentTimeMillis();
@@ -160,10 +166,10 @@ final class Store extends SQLiteOpenHelper {
         });
     }
 
-    void saveMetadata(String id, String title, JSONObject metadata, Models.AreaUnit unit, String mode) throws Exception {
+    public void saveMetadata(String id, String title, JSONObject metadata, Models.AreaUnit unit, String mode) throws Exception {
         if (title.length() > 200) throw new IllegalArgumentException("Title exceeds limit");
-        for (String field : Fields.KEYS) {
-            if (metadata.optString(field).length() > Fields.limit(field))
+        for (String field : MetadataFields.KEYS) {
+            if (metadata.optString(field).length() > MetadataFields.limit(field))
                 throw new IllegalArgumentException("Field exceeds limit: " + field);
         }
         transaction(() -> {
@@ -176,7 +182,7 @@ final class Store extends SQLiteOpenHelper {
             if (record.status == Models.Status.DRAFT || record.status == Models.Status.READY)
                 v.put("mode", mode);
             StringBuilder search = new StringBuilder(title);
-            for (String field : Fields.KEYS) search.append(' ').append(metadata.optString(field));
+            for (String field : MetadataFields.KEYS) search.append(' ').append(metadata.optString(field));
             v.put("search_text", search.toString().toLowerCase(java.util.Locale.ROOT));
             v.put("updated", System.currentTimeMillis());
             getWritableDatabase().update("activity", v, "id=?", new String[]{id});
@@ -187,7 +193,7 @@ final class Store extends SQLiteOpenHelper {
         });
     }
 
-    static boolean ready(String title, JSONObject metadata) {
+    public static boolean ready(String title, JSONObject metadata) {
         return !title.trim().isEmpty() && !metadata.optString("usage").isEmpty()
                 && (metadata.optString("email").isBlank()
                     || android.util.Patterns.EMAIL_ADDRESS.matcher(metadata.optString("email")).matches())
@@ -196,7 +202,7 @@ final class Store extends SQLiteOpenHelper {
                 && (!metadata.optString("location").trim().isEmpty() || metadata.has("anchor_lat"));
     }
 
-    void markReady(String id) throws Exception {
+    public void markReady(String id) throws Exception {
         transaction(() -> {
             Models.Record r = load(id);
             require(r.status == Models.Status.DRAFT && ready(r.title, r.metadata), "Required metadata missing");
@@ -205,7 +211,7 @@ final class Store extends SQLiteOpenHelper {
         });
     }
 
-    Models.Record load(String id) throws JSONException {
+    public Models.Record load(String id) throws JSONException {
         Models.Record r = new Models.Record();
         try (Cursor c = getReadableDatabase().rawQuery("SELECT * FROM activity WHERE id=?", new String[]{id})) {
             if (!c.moveToFirst()) throw new IllegalStateException("Record no longer exists");
@@ -239,40 +245,40 @@ final class Store extends SQLiteOpenHelper {
         return r;
     }
 
-    List<Models.Record> list(String search, String view, String sort) throws JSONException {
+    public List<Models.Record> list(String search, String view, String sort) throws JSONException {
         return list(search, view, sort, RecordFilter.none());
     }
 
-    enum AreaComparison {
+    public enum AreaComparison {
         ANY(""), EQUAL("="), GREATER(">"), LESS("<");
         final String sql;
         AreaComparison(String sql) { this.sql = sql; }
     }
 
-    record RecordFilter(String status, String usage, AreaComparison comparison, double areaValue,
+    public record RecordFilter(String status, String usage, AreaComparison comparison, double areaValue,
                         Models.AreaUnit areaUnit, boolean warnings, long from, long until) {
-        RecordFilter {
+        public RecordFilter {
             if (comparison == null || areaUnit == null || !Double.isFinite(areaValue) || areaValue < 0
                     || java.math.BigDecimal.valueOf(areaValue).stripTrailingZeros().scale() > 4)
                 throw new IllegalArgumentException("Invalid area comparison");
             if (comparison == AreaComparison.ANY) { areaValue = 0; areaUnit = Models.AreaUnit.ACRE; }
         }
-        static RecordFilter none() {
+        public static RecordFilter none() {
             return new RecordFilter("", "", AreaComparison.ANY, 0, Models.AreaUnit.ACRE, false, 0, Long.MAX_VALUE);
         }
     }
 
-    List<Models.Record> list(String search, String view, String sort, RecordFilter filter) throws JSONException {
+    public List<Models.Record> list(String search, String view, String sort, RecordFilter filter) throws JSONException {
         return records(recordQuery(search, view, sort, filter), 500, 0);
     }
 
-    static final int RECORD_PAGE_SIZE = 10;
+    public static final int RECORD_PAGE_SIZE = 10;
 
-    record RecordPage(List<Models.Record> records, int index, int total) {
-        int pageCount() { return total == 0 ? 1 : (total - 1) / RECORD_PAGE_SIZE + 1; }
+    public record RecordPage(List<Models.Record> records, int index, int total) {
+        public int pageCount() { return total == 0 ? 1 : (total - 1) / RECORD_PAGE_SIZE + 1; }
     }
 
-    RecordPage listPage(String search, String view, String sort, RecordFilter filter, int index) throws JSONException {
+    public RecordPage listPage(String search, String view, String sort, RecordFilter filter, int index) throws JSONException {
         if (index < 0) throw new IllegalArgumentException("Page index cannot be negative");
         RecordQuery query = recordQuery(search, view, sort, filter);
         int total;
@@ -362,7 +368,7 @@ final class Store extends SQLiteOpenHelper {
         return out;
     }
 
-    void start(String id) throws Exception {
+    public void start(String id) throws Exception {
         transaction(() -> {
             Models.Record r = load(id);
             require(r.deletedAt == 0 && (r.status == Models.Status.DRAFT || r.status == Models.Status.READY
@@ -395,20 +401,20 @@ final class Store extends SQLiteOpenHelper {
         getWritableDatabase().insertOrThrow("geometry", null, v);
     }
 
-    void pause(String id, String reason) throws Exception {
+    public void pause(String id, String reason) throws Exception {
         transaction(() -> {
             if (load(id).status == Models.Status.IN_PROGRESS) changeStatus(id, Models.Status.PAUSED, reason);
             return null;
         });
     }
 
-    void duration(String id, long deltaMs) {
+    public void duration(String id, long deltaMs) {
         getWritableDatabase().execSQL("UPDATE geometry SET duration=duration+? WHERE activity_id=? "
                 + "AND version=(SELECT version FROM activity WHERE id=? AND status='IN_PROGRESS')",
                 new Object[]{Math.max(0, deltaMs), id, id});
     }
 
-    CaptureRules.Decision accept(String id, Models.Point point, long now, boolean manual, boolean override)
+    public CaptureRules.Decision accept(String id, Models.Point point, long now, boolean manual, boolean override)
             throws Exception {
         return transaction(() -> {
             Models.Record r = load(id);
@@ -452,7 +458,7 @@ final class Store extends SQLiteOpenHelper {
         getWritableDatabase().insertOrThrow("waypoint", null, v);
     }
 
-    void editPoints(String id, List<Models.Point> points) throws Exception {
+    public void editPoints(String id, List<Models.Point> points) throws Exception {
         transaction(() -> {
             Models.Record r = load(id);
             require(r.status == Models.Status.PAUSED && r.deletedAt == 0, "Pause before editing");
@@ -482,7 +488,7 @@ final class Store extends SQLiteOpenHelper {
         for (int i = 0; i < points.size(); i++) insertPoint(id, version, i, points.get(i));
     }
 
-    void undo(String id, boolean redo) throws Exception {
+    public void undo(String id, boolean redo) throws Exception {
         transaction(() -> {
             Models.Record r = load(id); require(r.openGeometry(), "No editable geometry");
             try (Cursor c = getReadableDatabase().rawQuery("SELECT id,before_points,after_points FROM edit "
@@ -497,7 +503,7 @@ final class Store extends SQLiteOpenHelper {
         });
     }
 
-    void revise(String id) throws Exception {
+    public void revise(String id) throws Exception {
         transaction(() -> {
             Models.Record r = load(id);
             require(r.editable() && r.status == Models.Status.COMPLETED, "Completed record required");
@@ -511,7 +517,7 @@ final class Store extends SQLiteOpenHelper {
         });
     }
 
-    void complete(String id) throws Exception {
+    public void complete(String id) throws Exception {
         transaction(() -> {
             Models.Record r = load(id);
             require(r.status == Models.Status.PAUSED && r.deletedAt == 0, "Pause and review before completion");
@@ -540,7 +546,7 @@ final class Store extends SQLiteOpenHelper {
         });
     }
 
-    String duplicate(String id) throws Exception {
+    public String duplicate(String id) throws Exception {
         return transaction(() -> {
             Models.Record r = load(id); require(r.status != Models.Status.IN_PROGRESS, "Pause before duplicating");
             String copy = create();
@@ -550,7 +556,7 @@ final class Store extends SQLiteOpenHelper {
         });
     }
 
-    void disposition(String id, String action) throws Exception {
+    public void disposition(String id, String action) throws Exception {
         transaction(() -> {
             Models.Record r = load(id);
             require(r.status != Models.Status.IN_PROGRESS, "Pause capture first");
@@ -614,7 +620,7 @@ final class Store extends SQLiteOpenHelper {
         getWritableDatabase().update("activity", v, "id=?", new String[]{id}); event(id, reason);
     }
 
-    void event(String id, String type) {
+    public void event(String id, String type) {
         ContentValues v = new ContentValues(); v.put("activity_id", id); v.put("type", type);
         v.put("time", System.currentTimeMillis()); v.put("actor", "LOCAL_USER");
         try (Cursor c = getReadableDatabase().rawQuery("SELECT version FROM activity WHERE id=?", new String[]{id})) {
@@ -623,8 +629,8 @@ final class Store extends SQLiteOpenHelper {
         getWritableDatabase().insertOrThrow("event", null, v);
     }
 
-    record History(long time, String type, int version) {}
-    List<History> history(String id) {
+    public record History(long time, String type, int version) {}
+    public List<History> history(String id) {
         List<History> out = new ArrayList<>();
         try (Cursor c = getReadableDatabase().rawQuery(
                 "SELECT time,type,version FROM event WHERE activity_id=? ORDER BY id DESC LIMIT 200", new String[]{id})) {

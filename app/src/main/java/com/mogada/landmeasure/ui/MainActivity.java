@@ -1,4 +1,15 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.ui;
+
+import com.mogada.landmeasure.BuildConfig;
+import com.mogada.landmeasure.LandApp;
+import com.mogada.landmeasure.R;
+import com.mogada.landmeasure.capture.CaptureService;
+import com.mogada.landmeasure.data.Store;
+import com.mogada.landmeasure.domain.CaptureRules;
+import com.mogada.landmeasure.domain.Geometry;
+import com.mogada.landmeasure.domain.MetadataFields;
+import com.mogada.landmeasure.domain.Models;
+import com.mogada.landmeasure.util.MapDirections;
 
 import android.Manifest;
 import android.app.AlertDialog;
@@ -397,13 +408,13 @@ public final class MainActivity extends ComponentActivity implements LocationLis
                 String key = Fields.FORM_KEYS[i];
                 if ("usage".equals(key)) {
                     label(R.string.usage);
-                    usageInput = spinner(USAGE_LABELS, indexOf(Fields.USAGES, r.metadata.optString("usage")));
+                    usageInput = spinner(USAGE_LABELS, indexOf(MetadataFields.USAGES, r.metadata.optString("usage")));
                     content.addView(usageInput); selection(usageInput, this::dirty);
                 } else {
-                    EditText field = labeledInput(Fields.FORM_LABELS[i], r.metadata.optString(key), Fields.limit(key));
+                    EditText field = labeledInput(Fields.FORM_LABELS[i], r.metadata.optString(key), MetadataFields.limit(key));
                     if ("email".equals(key)) field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
                     if ("phone".equals(key)) field.setInputType(InputType.TYPE_CLASS_PHONE);
-                    if (Fields.limit(key) > 200) field.setMinLines(2);
+                    if (MetadataFields.limit(key) > 200) field.setMinLines(2);
                     fields.put(key, field); field.addTextChangedListener(watcher(this::dirty));
                 }
             }
@@ -459,7 +470,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
             data = new JSONObject(editorMetadata.toString());
             for (Map.Entry<String, EditText> field : fields.entrySet())
                 data.put(field.getKey(), field.getValue().getText().toString().trim());
-            data.put("usage", Fields.USAGES[usageInput.getSelectedItemPosition()]);
+            data.put("usage", MetadataFields.USAGES[usageInput.getSelectedItemPosition()]);
         } catch (JSONException e) { error(e); return; }
         Models.AreaUnit unit = record.unit;
         String mode = record.mode;
@@ -587,9 +598,9 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         }
         secondary(R.string.history, this::showHistory);
         gap(10); label(R.string.metadata);
-        for (int i = 0; i < Fields.KEYS.length; i++) {
-            String value = r.metadata.optString(Fields.KEYS[i]);
-            if (!value.isBlank()) body(getString(Fields.LABELS[i]) + ": " + metadataValue(Fields.KEYS[i], value));
+        for (int i = 0; i < MetadataFields.KEYS.length; i++) {
+            String value = r.metadata.optString(MetadataFields.KEYS[i]);
+            if (!value.isBlank()) body(getString(Fields.LABELS[i]) + ": " + metadataValue(MetadataFields.KEYS[i], value));
         }
         body(getString(R.string.record_provenance, date(r.created), date(r.updated), r.version, r.appVersion));
         warning(getString(R.string.disclaimer));
@@ -1062,7 +1073,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         Spinner status = spinner(statuses, statusIndex); form.addView(text(getString(R.string.sort_status), 14, colors.text)); form.addView(status);
         int[] usages = new int[USAGE_LABELS.length + 1]; usages[0] = R.string.any;
         System.arraycopy(USAGE_LABELS, 0, usages, 1, USAGE_LABELS.length);
-        Spinner usage = spinner(usages, recordFilter.usage().isEmpty() ? 0 : indexOf(Fields.USAGES, recordFilter.usage()) + 1);
+        Spinner usage = spinner(usages, recordFilter.usage().isEmpty() ? 0 : indexOf(MetadataFields.USAGES, recordFilter.usage()) + 1);
         form.addView(text(getString(R.string.usage), 14, colors.text)); form.addView(usage);
         form.addView(text(getString(R.string.area_filter), 14, colors.text));
         Spinner comparison = spinner(new int[]{R.string.area_any, R.string.area_equal, R.string.area_greater,
@@ -1099,7 +1110,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
                 try {
                     recordFilter = new Store.RecordFilter(status.getSelectedItemPosition() == 0 ? ""
                             : Models.Status.values()[status.getSelectedItemPosition() - 1].name(),
-                            usage.getSelectedItemPosition() == 0 ? "" : Fields.USAGES[usage.getSelectedItemPosition() - 1],
+                            usage.getSelectedItemPosition() == 0 ? "" : MetadataFields.USAGES[usage.getSelectedItemPosition() - 1],
                             operator, operator == Store.AreaComparison.ANY ? 0 : parse(areaValue.getText().toString()),
                             Models.AreaUnit.values()[unit.getSelectedItemPosition()], warnings.isChecked(), first, last);
                 } catch (java.text.ParseException | IllegalArgumentException e) {
@@ -1129,7 +1140,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
     }
 
     private String metadataValue(String key, String value) {
-        if ("usage".equals(key)) return getString(USAGE_LABELS[indexOf(Fields.USAGES, value)]);
+        if ("usage".equals(key)) return getString(USAGE_LABELS[indexOf(MetadataFields.USAGES, value)]);
         if ("reference_source".equals(key)) return getString(switch (value) {
             case "user" -> R.string.source_user; case "document" -> R.string.source_document; default -> R.string.source_unknown;
         });
@@ -1197,7 +1208,7 @@ public final class MainActivity extends ComponentActivity implements LocationLis
         return getString(R.string.result_quality, quality(r.worst), getString(
                 r.mockCount > 0 ? R.string.simulated_warning : r.overrides > 0 ? R.string.overrides_warning : R.string.no_overrides));
     }
-    private String area(double value, Models.AreaUnit unit) { return getString(R.string.area_value, number(value / unit.divisor, 4), getString(unit.label)); }
+    private String area(double value, Models.AreaUnit unit) { return getString(R.string.area_value, number(value / unit.divisor, 4), getString(unitLabels()[unit.ordinal()])); }
     private String distance(double value) {
         return "km".equals(distancePreference) ? getString(R.string.distance_km, number(value / 1000, 3))
                 : getString(R.string.distance_m, number(value, 1));
@@ -1238,7 +1249,16 @@ public final class MainActivity extends ComponentActivity implements LocationLis
     }
 
     private void canvas(List<Models.Point> points) {
-        content.addView(new BoundaryView(this, points), new LinearLayout.LayoutParams(-1, dp(260)));
+        BoundaryView boundary = new BoundaryView(this, points);
+        TextView edgeDistance = text(getString(R.string.edge_hint), 16, colors.text);
+        edgeDistance.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        boundary.setEdgeListener((from, to, metres) -> {
+            String selected = getString(R.string.edge_distance, from + 1, to + 1, number(metres, 2));
+            edgeDistance.setText(selected);
+            boundary.setContentDescription(getString(R.string.canvas_description, points.size()) + " " + selected);
+        });
+        content.addView(boundary, new LinearLayout.LayoutParams(-1, dp(260)));
+        content.addView(edgeDistance);
         note(R.string.canvas_caption);
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }

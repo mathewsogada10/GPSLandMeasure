@@ -1,14 +1,11 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.ui;
+
+import com.mogada.landmeasure.R;
 
 final class Fields {
     static final String[] FORM_KEYS = {"owner", "phone", "email", "consent", "usage", "location"};
     static final int[] FORM_LABELS = {R.string.owner, R.string.phone, R.string.email, R.string.consent,
             R.string.usage, R.string.location};
-    static final String[] KEYS = {
-        "land", "owner", "phone", "email", "identifier_label", "identifier", "consent",
-        "usage", "usage_text", "location", "county", "subcounty", "ward", "village",
-        "landmark", "reference", "reference_source", "boundary", "access"
-    };
     static final int[] LABELS = {
         R.string.land_label, R.string.owner, R.string.phone, R.string.email,
         R.string.identifier_label, R.string.identifier, R.string.consent,
@@ -16,12 +13,5 @@ final class Fields {
         R.string.subcounty, R.string.ward, R.string.village, R.string.landmark,
         R.string.reference, R.string.reference_source, R.string.boundary, R.string.access
     };
-    static final String[] USAGES = {"agricultural", "residential", "commercial", "conservation", "mixed", "other"};
-    static int limit(String key) {
-        return switch (key) {
-            case "consent", "location", "boundary", "access", "usage_text" -> 2000;
-            default -> 200;
-        };
-    }
     private Fields() {}
 }

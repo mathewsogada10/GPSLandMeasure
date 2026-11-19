@@ -1,4 +1,4 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.domain;
 
 import net.sf.geographiclib.Geodesic;
 import net.sf.geographiclib.PolygonArea;
@@ -11,23 +11,23 @@ import org.locationtech.jts.operation.valid.TopologyValidationError;
 
 import java.util.List;
 
-final class Geometry {
-    static final String ALGORITHM = "GeographicLib WGS84 2.1 / Karney; conversion-v1";
-    enum Error { NONE, TOO_FEW, INVALID_COORDINATE, DUPLICATE, INTERSECTION, ZERO_AREA }
+public final class Geometry {
+    public static final String ALGORITHM = "GeographicLib WGS84 2.1 / Karney; conversion-v1";
+    public enum Error { NONE, TOO_FEW, INVALID_COORDINATE, DUPLICATE, INTERSECTION, ZERO_AREA }
 
-    record Result(double area, double perimeter, double closure, Error error, int point, int other) {
-        boolean valid() { return error == Error.NONE; }
+    public record Result(double area, double perimeter, double closure, Error error, int point, int other) {
+        public boolean valid() { return error == Error.NONE; }
     }
 
-    static double distance(Models.Point a, Models.Point b) {
+    public static double distance(Models.Point a, Models.Point b) {
         return Geodesic.WGS84.Inverse(a.lat, a.lon, b.lat, b.lon).s12;
     }
 
-    static double unwrap(double lon, double previous) {
+    public static double unwrap(double lon, double previous) {
         return previous + Math.IEEEremainder(lon - previous, 360);
     }
 
-    static Result calculate(List<Models.Point> points) {
+    public static Result calculate(List<Models.Point> points) {
         if (points.size() < 3) return invalid(Error.TOO_FEW, points.size(), -1);
         Coordinate[] ring = new Coordinate[points.size() + 1];
         PolygonArea polygon = new PolygonArea(Geodesic.WGS84, false);

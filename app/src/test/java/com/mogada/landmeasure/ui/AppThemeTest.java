@@ -1,4 +1,4 @@
-package com.mogada.landmeasure;
+package com.mogada.landmeasure.ui;
 
 import static org.junit.Assert.*;
 
